@@ -1,6 +1,6 @@
 # KnowHow
 
-Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. Students find mentors who aced a subject, book sessions with a Zoom link, and rate them afterwards.
+Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. Students find mentors who aced a subject, book sessions, meet in a video call right on the site, chat, and rate mentors afterwards.
 
 ## What's here
 
@@ -14,6 +14,9 @@ Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. 
 
 - **Accounts use Supabase Auth**: sign up (with email confirmation), log in, log out, forgot password, and "Set a new password" from the reset email. Profiles come from `public.profiles`; admins are users with `is_admin = true`.
 - **All app data lives in Supabase**: mentor profiles, sessions, reviews, posts, likes, saved mentors, notifications, credentials, videos, reports and the activity log. Photos, covers and videos go to Storage (`avatars`, `videos`), credentials to the private `credentials` bucket.
+- **Fixed roles**: people sign up as a student or a mentor and can't switch. Only an admin can change someone's role (Admin Panel → account type). Students book and message mentors; mentors set up a mentor profile, confirm sessions and reply.
+- **Video calls on the site**: confirmed sessions get a **Join call** button. The call has video, audio, screen sharing, chat with emojis and emoji reactions. It uses WebRTC (browser to browser) with Supabase Realtime for signaling, so there is no Zoom account or extra server. Very strict networks (some school or office Wi-Fi) can block the video part; chat still works.
+- **Messages**: private student ↔ mentor chat with an emoji picker and live updates (Supabase Realtime on `public.messages`).
 - **Database updates** live in `supabase/`. On an existing project run each `update-*.sql` once, in order. `schema.sql` already includes them for a fresh project.
 - Supabase project URL and publishable key are set at the top of the auth section in `index.html` (`SB_URL`, `SB_KEY`).
 
@@ -36,15 +39,11 @@ Or import this repository on vercel.com. It's a static site, so no build setting
 
 Only the Project URL and the anon/publishable key go in the website. Never commit the `service_role` key.
 
-## Automatic Zoom meetings
+## Video calls
 
-`supabase/functions/create-zoom-meeting/index.ts` is a Supabase Edge Function. When a mentor taps **Create Zoom meeting automatically**, it creates a scheduled Zoom meeting at the session time and confirms the session with the join link. Zoom credentials stay in Supabase secrets, never in the website.
+No setup is needed beyond running `update-5.sql` (or a fresh `schema.sql`). Realtime must be on in Supabase (it is by default). Calls use Google's public STUN servers; if many users can't connect video on campus Wi-Fi, add a TURN server to `ICE_SERVERS` in `index.html`.
 
-1. **Zoom:** marketplace.zoom.us → Develop → Build App → **Server-to-Server OAuth**. Add the scope to create meetings (`meeting:write:meeting:admin`, or `meeting:write:admin` on older apps), then **Activate**. Copy the Account ID, Client ID and Client Secret.
-2. **Supabase → Edge Functions → Secrets:** add `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` (optional `ZOOM_HOST_EMAIL`).
-3. **Supabase → Edge Functions → Deploy a new function → Via editor:** name it `create-zoom-meeting`, paste `index.ts`, deploy.
-
-Mentors can still paste their own Zoom link instead.
+`supabase/functions/create-zoom-meeting/` is from the older Zoom flow and is optional now. Mentors can still paste a backup Zoom link when confirming.
 
 ## Sign-up rules
 
