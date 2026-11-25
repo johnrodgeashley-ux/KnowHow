@@ -185,6 +185,13 @@ create table public.activity_log (
   created_at  timestamptz not null default now()
 );
 
+-- Non-Gmail emails allowed to sign up (for the admin). Editable only in the SQL Editor.
+create table public.allowed_non_gmail (
+  email       text primary key check (email = lower(email)),
+  note        text,
+  created_at  timestamptz not null default now()
+);
+
 -- ---------------------------------------------------------------------
 -- Helper: is the signed-in user an admin?
 -- ---------------------------------------------------------------------
@@ -203,7 +210,8 @@ returns trigger
 language plpgsql security definer set search_path = public
 as $$
 begin
-  if new.email !~* '^[a-z0-9.+_-]+@gmail\.com$' then
+  if new.email !~* '^[a-z0-9.+_-]+@gmail\.com$'
+     and not exists (select 1 from public.allowed_non_gmail a where a.email = lower(new.email)) then
     raise exception 'Please sign up with a Gmail address (ending in @gmail.com).';
   end if;
 
@@ -470,6 +478,7 @@ alter table public.saved_mentors    enable row level security;
 alter table public.notifications    enable row level security;
 alter table public.reports          enable row level security;
 alter table public.activity_log     enable row level security;
+alter table public.allowed_non_gmail enable row level security;
 
 -- Nobody signed out can read or write anything.
 revoke all on all tables in schema public from anon;
@@ -570,6 +579,9 @@ create policy "reports: own or admin"    on public.reports for select to authent
 
 -- activity log: admins only
 revoke insert, update, delete on public.activity_log from authenticated;
+
+-- non-Gmail exception list: no app access at all (SQL Editor only)
+revoke all on public.allowed_non_gmail from anon, authenticated;
 create policy "activity: admin read" on public.activity_log for select to authenticated using (public.is_admin());
 
 -- ---------------------------------------------------------------------
@@ -626,8 +638,13 @@ insert into public.subjects (name, category, is_critical) values
 on conflict (name) do nothing;
 
 -- =====================================================================
--- MAKE ADMIN (run separately, after the admin has signed up in the app)
--- Replace the email with the admin's Gmail address:
+-- MAKE ADMIN (run separately, after the admin account exists)
+-- If the admin email is NOT Gmail, first allow it:
+--
+--   insert into public.allowed_non_gmail (email, note) values ('admin@example.com', 'KnowHow admin');
+--
+-- then create the user in Authentication > Users > Add user (tick Auto Confirm).
+-- Replace the email below with the admin's address:
 --
 --   update public.profiles
 --      set is_admin = true, id_verified = true

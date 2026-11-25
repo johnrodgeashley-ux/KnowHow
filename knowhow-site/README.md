@@ -12,7 +12,9 @@ Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. 
 
 ## Current state
 
-This is a **prototype**. Accounts, bookings and posts are saved in each visitor's browser (localStorage), not in Supabase yet. Forgot password shows the confirmation screen but sends no email until Supabase Auth is connected.
+- **Accounts use Supabase Auth**: sign up (with email confirmation), log in, log out, forgot password, and "Set a new password" from the reset email. Profiles come from `public.profiles`; admins are users with `is_admin = true`.
+- **Everything else is still a prototype**: mentors, bookings, posts, reviews and photos are saved in each visitor's browser (localStorage). Moving those to the Supabase tables is the next step.
+- Supabase project URL and publishable key are set at the top of the auth section in `index.html` (`SB_URL`, `SB_KEY`).
 
 ## Deploy (Vercel)
 
@@ -32,6 +34,16 @@ Or import this repository on vercel.com. It's a static site, so no build setting
 5. **Authentication → Emails → SMTP Settings**: connect a mail service (for example Resend or Brevo) so password-reset emails reach students.
 
 Only the Project URL and the anon/publishable key go in the website. Never commit the `service_role` key.
+
+## Automatic Zoom meetings
+
+`supabase/functions/create-zoom-meeting/index.ts` is a Supabase Edge Function. When a mentor taps **Create Zoom meeting automatically**, it creates a scheduled Zoom meeting at the session time and confirms the session with the join link. Zoom credentials stay in Supabase secrets, never in the website.
+
+1. **Zoom:** marketplace.zoom.us → Develop → Build App → **Server-to-Server OAuth**. Add the scope to create meetings (`meeting:write:meeting:admin`, or `meeting:write:admin` on older apps), then **Activate**. Copy the Account ID, Client ID and Client Secret.
+2. **Supabase → Edge Functions → Secrets:** add `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET` (optional `ZOOM_HOST_EMAIL`).
+3. **Supabase → Edge Functions → Deploy a new function → Via editor:** name it `create-zoom-meeting`, paste `index.ts`, deploy.
+
+Mentors can still paste their own Zoom link instead.
 
 ## Sign-up rules
 
