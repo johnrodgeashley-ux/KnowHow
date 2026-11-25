@@ -1414,7 +1414,7 @@ const dataUrlToBlob=async d=>(await fetch(d)).blob();
 const upImage=async(me,dataUrl,name)=>{const blob=await dataUrlToBlob(dataUrl);const path=`${me}/${name}-${Date.now()}.jpg`;
  const{error}=await sb.storage.from('avatars').upload(path,blob,{contentType:'image/jpeg'});if(error)throw error;return pubUrl('avatars',path)};
 const dbErr=e=>{const m=(e&&e.message)||'';
- if(/row-level security|permission denied/i.test(m))return 'You don’t have permission to do that.';
+ if(/row-level security|permission denied/i.test(m))return `You don’t have permission to do that. (${(e&&e.code)||'error'}: ${m})`;
  if(/bio/i.test(m)&&/check/i.test(m))return 'Your bio must be 30 to 1000 characters.';
  if(/available_window/i.test(m))return 'Your available end time must be after the start time.';
  if(/duplicate key/i.test(m))return 'That already exists.';
@@ -1559,7 +1559,9 @@ function App(){
   who:s=>s.mentor===user.id?{id:s.learner,name:s.learnerName||'Student',pal:hashN(s.learner||'x')%8,photo:s.learnerPhoto||null,course:'Student',year:'',rate:0,reviews:[],acc:'#1B365D'}
    :(R.mentors.find(m=>m.id===s.mentor)||{...FALLBACK_M,id:s.mentor})};
  const bookable=R.mentors.filter(m=>m.id!==user.id);
- const run=async(promise,okMsg)=>{const{error}=await promise;if(error){toast(dbErr(error));return false}if(okMsg)toast(okMsg);await reload();return true};
+ const ensureSession=async()=>{try{const{data}=await sb.auth.getSession();if(data&&data.session&&data.session.user&&data.session.user.id===user.id)return true}catch(e){}
+  toast('Your login expired. Please log in again.');setModal(null);setR(EMPTY_R);setDb(d=>({...d,session:null}));return false};
+ const run=async(promise,okMsg)=>{if(!(await ensureSession()))return false;const{error}=await promise;if(error){toast(dbErr(error));return false}if(okMsg)toast(okMsg);await reload();return true};
 
  const act={
   nav,setQ,toast,modal:setModal,
@@ -1593,6 +1595,7 @@ function App(){
   complete:id=>run(sb.from('sessions').update({status:'completed'}).eq('id',id),'Marked completed.'),
   review:(id,stars,text)=>{const s=R.sessions.find(x=>x.id===id);if(!s)return;return run(sb.from('reviews').insert({session_id:id,mentor_id:s.mentor,learner_id:user.id,stars,body:text||null}),'Thanks! Your review is posted.')},
   becomeMentor:async p=>{const me=user.id;let stage='saving your profile';
+   if(!(await ensureSession()))return;
    try{
     if(p.photo&&String(p.photo).startsWith('data:')){try{const url=await upImage(me,p.photo,'avatar');const r0=await sb.from('profiles').update({avatar_url:url}).eq('id',me);if(r0.error)throw r0.error;up(n=>{n.user.photo=url})}catch(pe){toast('Your photo didn’t upload ('+dbErr(pe)+'). Saving the rest of your profile.')}}
     stage='updating your role';
