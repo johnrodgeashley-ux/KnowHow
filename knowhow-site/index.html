@@ -574,6 +574,9 @@ html.dark .stu-chip{background:rgba(255,255,255,.08);color:var(--ink)}
 .pstat{border-radius:16px;background:rgba(255,255,255,.7);border:1px solid #fff;padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:1px}
 .pstat b{font-size:20px;font-weight:600;line-height:1.2}
 .pstat span{font-size:11.5px;color:var(--muted)}
+button.pstat{font:inherit;color:inherit;cursor:pointer;transition:transform .15s var(--out),background .15s}
+button.pstat:hover{background:#fff;transform:translateY(-1px)}
+html.dark button.pstat:hover{background:rgba(40,56,100,.85)}
 .cred-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 .cred-tile{display:flex;flex-direction:column;text-align:left;border-radius:18px;background:rgba(255,255,255,.78);border:1px solid #fff;padding:6px;transition:transform .2s var(--spring),box-shadow .2s;color:var(--navy);min-width:0}
 .cred-tile:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}
@@ -1134,12 +1137,12 @@ function Home({db,act,prefill}){
  let ms=[...db.mentors];
  if(tab==='crit')ms=ms.filter(m=>m.subjects.some(s=>SUBJ[s]?.crit));
  if(tab==='today')ms=ms.filter(availToday);
- if(tab==='top')ms=ms.sort((a,b)=>rating(b)-rating(a)||b.reviews.length-a.reviews.length);
+ if(tab==='top')ms=ms.filter(m=>m.reviews.length).sort((a,b)=>rating(b)-rating(a)||b.reviews.length-a.reviews.length);
  ms=ms.slice(0,3);
  const tiles=[
   {k:'critical',label:'Critical Subjects',sub:`${CRITICAL.length} hard subjects`,ic:'flame',cls:'tile-crit',go:()=>act.nav('critical')},
-  {k:'math',label:'Calculus & Math',sub:`${db.mentors.filter(m=>m.subjects.some(s=>SUBJ[s].cat==='Math')).length} mentors`,ic:'trend',cls:'tile-math',go:()=>act.nav('find',{cat:'Math'})},
-  {k:'prog',label:'Programming',sub:`${db.mentors.filter(m=>m.subjects.some(s=>SUBJ[s].cat==='Programming')).length} mentors`,ic:'code',cls:'tile-prog',go:()=>act.nav('find',{cat:'Programming'})},
+  {k:'math',label:'Calculus & Math',sub:`${db.mentors.filter(m=>m.subjects.some(s=>SUBJ[s]?.cat==='Math')).length} mentors`,ic:'trend',cls:'tile-math',go:()=>act.nav('find',{cat:'Math'})},
+  {k:'prog',label:'Programming',sub:`${db.mentors.filter(m=>m.subjects.some(s=>SUBJ[s]?.cat==='Programming')).length} mentors`,ic:'code',cls:'tile-prog',go:()=>act.nav('find',{cat:'Programming'})},
   {k:'feed',label:'Study Feed',sub:`${db.posts.length} posts`,ic:'msg',cls:'tile-feed',go:()=>document.getElementById('feed')?.scrollIntoView({behavior:'smooth',block:'start'})}
  ];
  const post=()=>{if(text.trim().length<10){setErr('Write at least a sentence so mentors know what you need.');return}setErr('');act.post({kind:isMentor?kind:'request',text:text.trim(),tags:[subj]});setText('');setOpen(false)};
@@ -1159,6 +1162,7 @@ function Home({db,act,prefill}){
    <div className="flex items-center gap-3 flex-wrap"><h2 className="text-xl font-semibold m-0 mr-auto">Recommended mentors</h2>
     <div className="tabs" role="group" aria-label="Filter mentors">${[['all','All Subjects'],['crit','Critical'],['today','Available Today'],['top','Top Rated']].map(([k,l])=>html`<button key=${k} type="button" className=${cx('tab',tab===k&&'on')} aria-pressed=${tab===k} onClick=${()=>setTab(k)}>${l}</button>`)}</div></div>
    ${ms.length?html`<div key=${tab} className="grid gap-4 stag" style=${{gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))'}}>${ms.map((m,i)=>html`<${MentorCard} key=${m.id} m=${m} db=${db} act=${act} i=${i}/>`)}</div>`
+    :db.mentors.length&&tab==='top'?html`<${Empty} icon="star" title="No ratings yet" text="Mentors show up here once students rate a completed session."/>`
     :db.mentors.length?html`<${Empty} title="No mentors match this filter" text="Try another filter or post a study request below so mentors can reach out."/>`
     :html`<${Empty} icon="userplus" title="No mentors yet" text="KnowHow is just getting started. Post a study request below, or be the first mentor."><button type="button" className="btn sm navy mt-2" onClick=${()=>act.nav('become')}>Become a mentor</button></${Empty}>`}
    ${db.mentors.length>3&&html`<button type="button" className="btn sm self-center" onClick=${()=>act.nav('find')}>See all ${db.mentors.length} mentors<${Icon} n="chevR" s=${15}/></button>`}
@@ -1192,7 +1196,7 @@ function Home({db,act,prefill}){
 function Find({db,act,params,q}){
  const[subject,setSubject]=useState(params?.subject||'Any');
  const[cat,setCat]=useState(params?.cat||'Any');
- const[maxRate,setMaxRate]=useState(200);
+ const rateCap=Math.max(200,Math.ceil(Math.max(0,...db.mentors.map(m=>+m.rate||0))/50)*50);const[maxRate,setMaxRate]=useState(null);const anyRate=maxRate===null||maxRate>=rateCap;
  const[minRating,setMinRating]=useState(0);
  const[avail,setAvail]=useState('any');
  const[sort,setSort]=useState('rating');
@@ -1200,18 +1204,18 @@ function Find({db,act,params,q}){
  const qq=(q||'').trim();
  let ms=qq?matchMentors(db.mentors,qq):[...db.mentors];
  if(qq&&!ms.length)ms=db.mentors.filter(m=>(m.name+' '+m.course+' '+m.subjects.join(' ')).toLowerCase().includes(qq.toLowerCase()));
- ms=ms.filter(m=>(subject==='Any'||m.subjects.includes(subject))&&(cat==='Any'||m.subjects.some(s=>SUBJ[s].cat===cat||(cat==='Programming'&&s.includes('Circuits'))))&&m.rate<=maxRate&&rating(m)>=minRating&&(avail==='any'||(avail==='today'&&availToday(m))||(avail==='weekend'&&m.days.some(d=>d>=5))||(avail==='evening'&&toMin(m.to)>=19*60)));
+ ms=ms.filter(m=>(subject==='Any'||m.subjects.includes(subject))&&(cat==='Any'||m.subjects.some(s=>SUBJ[s]?.cat===cat||(cat==='Programming'&&s.includes('Circuits'))))&&(anyRate||(+m.rate||0)<=maxRate)&&rating(m)>=minRating&&(avail==='any'||(avail==='today'&&availToday(m))||(avail==='weekend'&&m.days.some(d=>d>=5))||(avail==='evening'&&toMin(m.to)>=19*60)));
  ms.sort((a,b)=>sort==='rating'?rating(b)-rating(a):sort==='low'?a.rate-b.rate:sort==='reviews'?b.reviews.length-a.reviews.length:b.taught-a.taught);
  const sig=[subject,cat,maxRate,minRating,avail,sort,qq].join('|');
- const reset=()=>{setSubject('Any');setCat('Any');setMaxRate(200);setMinRating(0);setAvail('any');setSort('rating');act.setQ('')};
+ const reset=()=>{setSubject('Any');setCat('Any');setMaxRate(null);setMinRating(0);setAvail('any');setSort('rating');act.setQ('')};
  const narrow=useMedia('(max-width: 760px)');const[showF,setShowF]=useState(false);
- const nOn=[subject!=='Any',cat!=='Any',maxRate!==200,minRating!==0,avail!=='any'].filter(Boolean).length;
+ const nOn=[subject!=='Any',cat!=='Any',!anyRate,minRating!==0,avail!=='any'].filter(Boolean).length;
  return html`<div className="flex flex-col gap-5">
   ${narrow&&html`<button type="button" className="btn w-full !justify-between" aria-expanded=${showF} onClick=${()=>setShowF(v=>!v)}><span className="inline-flex items-center gap-2"><${Icon} n="search" s=${16}/>Filters${nOn?html` <span className="cnt-badge">${nOn}</span>`:''}</span><span className="text-xs muted">${showF?'Hide':'Subject, rate, rating…'}</span></button>`}
   ${(!narrow||showF)&&html`<div className="glass r-card p-4 grid gap-3" style=${{gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))'}}>
    <div className="field"><label htmlFor="fSub">Subject</label><select id="fSub" className="inp" value=${subject} onChange=${e=>setSubject(e.target.value)}><option>Any</option>${SUBJECTS.map(s=>html`<option key=${s}>${s}</option>`)}</select></div>
    <div className="field"><label htmlFor="fCat">Area</label><select id="fCat" className="inp" value=${cat} onChange=${e=>setCat(e.target.value)}>${['Any',...SUBJ_CATS].map(c=>html`<option key=${c}>${c}</option>`)}</select></div>
-   <div className="field"><label htmlFor="fRate">Max rate: <b className="text-navy tnum">${peso(maxRate)}/hr</b></label><input id="fRate" type="range" min="100" max="200" step="10" value=${maxRate} onInput=${e=>setMaxRate(+e.target.value)} className="h-11"/></div>
+   <div className="field"><label htmlFor="fRate">Max rate: <b className="text-navy tnum">${anyRate?'Any rate':peso(maxRate)+'/hr'}</b></label><input id="fRate" type="range" min="50" max=${rateCap} step="10" value=${anyRate?rateCap:maxRate} onInput=${e=>{const v=+e.target.value;setMaxRate(v>=rateCap?null:v)}} className="h-11"/></div>
    <div className="field"><label htmlFor="fRating">Rating</label><select id="fRating" className="inp" value=${minRating} onChange=${e=>setMinRating(+e.target.value)}><option value="0">Any rating</option><option value="4.5">4.5 and up</option><option value="4.8">4.8 and up</option></select></div>
    <div className="field"><label htmlFor="fAvail">Availability</label><select id="fAvail" className="inp" value=${avail} onChange=${e=>setAvail(e.target.value)}><option value="any">Any day</option><option value="today">Available today</option><option value="weekend">Weekends</option><option value="evening">Evenings (7 PM+)</option></select></div>
    <div className="field"><label htmlFor="fSort">Sort by</label><select id="fSort" className="inp" value=${sort} onChange=${e=>setSort(e.target.value)}><option value="rating">Top rated</option><option value="low">Lowest rate</option><option value="reviews">Most reviews</option><option value="taught">Most sessions taught</option></select></div>
@@ -1234,7 +1238,7 @@ function Critical({db,act}){
    </div>
    ${CRITICAL.map((s,i)=>{const n=db.mentors.filter(m=>m.subjects.includes(s)).length;const on=sel===s;return html`<button key=${s} type="button" onClick=${()=>setSel(on?null:s)} aria-pressed=${on} className=${cx('group glass r-card p-4 flex items-center gap-3 text-left lift',on&&'!bg-white ring-2 ring-crimson')} style=${{'--i':i+1}}>
     <span className=${cx('w-11 h-11 rounded-2xl grid place-items-center flex-none',on?'bg-crimson text-white':'bg-crimson/10 text-crimson')}><${Icon} n="flame" s=${19}/></span>
-    <span className="min-w-0 flex-1"><b className="block font-semibold text-[13.5px] leading-tight">${s}</b><span className="text-xs muted">${n} mentor${n===1?'':'s'} · ${SUBJ[s].cat}</span></span>
+    <span className="min-w-0 flex-1"><b className="block font-semibold text-[13.5px] leading-tight">${s}</b><span className="text-xs muted">${n} mentor${n===1?'':'s'} · ${SUBJ[s]?.cat}</span></span>
     <span className="arrow !w-8 !h-8"><${Icon} n="arrow" s=${14}/></span>
    </button>`})}
   </section>
@@ -1388,7 +1392,7 @@ function Profile({db,act,id}){
    <section className="glass r-card p-5 flex flex-col gap-4">
     <div className="flex items-end justify-between gap-3"><span><span className="eyebrow block mb-1">Rate</span><b className="text-3xl font-semibold tnum tracking-tight">${peso(m.rate)}</b><span className="muted text-sm">/hr</span></span>
      ${r?html`<span className="flex flex-col items-end gap-0.5"><${Stars} n=${r} s=${14}/><span className="text-xs muted">${r} average</span></span>`:html`<span className="tag navy">New mentor</span>`}</div>
-    <div className="grid grid-cols-3 gap-2"><div className="pstat"><b>${r||'New'}</b><span>rating</span></div><div className="pstat"><b className="tnum">${m.reviews.length}</b><span>reviews</span></div><div className="pstat"><b className="tnum">${m.taught}</b><span>sessions</span></div></div>
+    <div className="grid grid-cols-3 gap-2"><button type="button" className="pstat" onClick=${()=>{const el=document.getElementById('reviews');el&&el.scrollIntoView({behavior:'smooth',block:'start'})}}><b>${r||'New'}</b><span>rating</span></button><button type="button" className="pstat" onClick=${()=>{const el=document.getElementById('reviews');el&&el.scrollIntoView({behavior:'smooth',block:'start'})}}><b className="tnum">${m.reviews.length}</b><span>reviews</span></button><div className="pstat"><b className="tnum">${m.taught}</b><span>sessions</span></div></div>
     ${canAct&&html`<div className="flex flex-col gap-2"><button type="button" className="btn red w-full justify-center" onClick=${()=>act.book(m.id)}><${Icon} n="calendar" s=${16}/>Book a session</button><button type="button" className="btn w-full justify-center" onClick=${()=>act.message(m.id,m.name,m.photo)}><${Icon} n="msg" s=${16}/>Message ${first}</button></div>`}
     ${nVer>0&&html`<span className="text-xs muted inline-flex items-center gap-1.5"><${Icon} n="award" s=${14} className="text-navy"/>${nVer} verified credential${nVer>1?'s':''}</span>`}
    </section>
@@ -1424,7 +1428,7 @@ function Profile({db,act,id}){
      <b className="block text-[13px] font-semibold px-2 pt-2 pb-1">${v.title}</b>
     </button>`)}</div>
    </section>
-   <section className="glass r-card p-5 flex flex-col gap-4">
+   <section id="reviews" className="glass r-card p-5 flex flex-col gap-4 scroll-mt-6">
     <div className="flex items-center gap-3 flex-wrap"><span className="eyebrow mr-auto">Ratings & reviews</span>${toRate&&html`<button type="button" className="btn sm red" onClick=${()=>act.openSession(toRate.id)}><${Icon} n="star" s=${14}/>Rate your last session</button>`}</div>
     <div className="grid gap-6" style=${{gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))'}}>
      <div className="flex flex-col gap-1.5">${r?html`<b className="text-5xl font-semibold leading-none">${r}</b>`:html`<b className="text-3xl font-semibold leading-none text-navy">New</b>`}<${Stars} n=${r} s=${16}/><span className="text-xs muted">${m.reviews.length} review${m.reviews.length===1?'':'s'}</span>
@@ -2263,7 +2267,7 @@ function CredModal({db,act,mid,cid,onClose}){
 }
 
 /* ---------- auth ---------- */
-const APP_BUILD='20261125-184616'; // replaced with the build time when the site is built for Vercel
+const APP_BUILD='20261125-185713'; // replaced with the build time when the site is built for Vercel
 const SB_URL='https://ltskaojuutggtiabzqbr.supabase.co';
 const SB_KEY='sb_publishable_HERUy1g6qigG6lwSOf3oBQ_pQ6RrYMr'; // publishable key: safe in the browser; never put the secret/service_role key here
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'implicit'}}):null;
