@@ -509,6 +509,10 @@ html.dark .cm-form input{background:rgba(255,255,255,.06);border-color:rgba(255,
 .cm-toggle{border:0;background:transparent;border-radius:999px;padding:6px 10px;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;transition:background .2s,color .2s}
 .cm-toggle:hover,.cm-toggle.on{background:rgba(15,37,87,.06);color:var(--navy)}
 html.dark .cm-toggle:hover,html.dark .cm-toggle.on{background:rgba(255,255,255,.08)}
+.upd-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:85;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 16px;border-radius:999px;background:#0F2557;color:#fff;font-size:13px;font-weight:500;box-shadow:0 12px 32px rgba(15,37,87,.35);white-space:nowrap;max-width:calc(100vw - 24px);animation:fade .25s ease both}
+@media (max-width:760px){.upd-bar{bottom:calc(92px + env(safe-area-inset-bottom,0px))}}
+html.dark .upd-bar{background:#2D4F96}
+.call-warn{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:8;width:max-content;max-width:calc(100% - 20px);background:rgba(244,187,85,.96);color:#231700;font-size:12.5px;font-weight:600;line-height:1.35;padding:8px 14px;border-radius:14px;display:flex;gap:8px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 /* ---------- group sessions ---------- */
 .seatbar{height:6px;border-radius:999px;background:rgba(15,37,87,.08);overflow:hidden}
 .seatbar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--navy2),var(--crimson));transition:width .6s var(--out)}
@@ -1802,7 +1806,7 @@ function CallRoom({db,act,id,onClose}){
  const[board,setBoard]=useState(false);const boardRef=useRef(false);boardRef.current=board;const strokesRef=useRef([]);const[wbTick,setWbTick]=useState(0);
  const[rec,setRec]=useState(false);const recRef=useRef(null);const viewRef=useRef({});
  const[chatOpen,setChatOpen]=useState(false);const[msgs,setMsgs]=useState([]);const[text,setText]=useState('');const[unread,setUnread]=useState(0);
- const[floats,setFloats]=useState([]);const[note,setNote]=useState('');const[secs,setSecs]=useState(0);const[showReact,setShowReact]=useState(false);
+ const[floats,setFloats]=useState([]);const[note,setNote]=useState('');const[secs,setSecs]=useState(0);const[showReact,setShowReact]=useState(false);const[oldPeers,setOldPeers]=useState([]);
  const chatOpenRef=useRef(false);chatOpenRef.current=chatOpen;
 
  const send=(type,payload)=>{const ch=chRef.current;if(ch)ch.send({type:'broadcast',event:'sig',payload:{type,from:me.id,...(payload||{})}})};
@@ -1867,11 +1871,12 @@ function CallRoom({db,act,id,onClose}){
    if(localRef.current&&st){localRef.current.srcObject=st;localRef.current.play&&localRef.current.play().catch(()=>{})}
    const ch=sb.channel(`call-${id}`,{config:{broadcast:{self:false},presence:{key:me.id}}});chRef.current=ch;
    ch.on('broadcast',{event:'sig'},({payload})=>onSig(payload));
-   ch.on('presence',{event:'sync'},()=>{const ids=Object.keys(ch.presenceState()||{}).filter(x=>x!==me.id);
+   ch.on('presence',{event:'sync'},()=>{const pst=ch.presenceState()||{};const ids=Object.keys(pst).filter(x=>x!==me.id);
+    setOldPeers(ids.filter(pid=>{const mt=(pst[pid]||[])[0]||{};return mt.build!==APP_BUILD}));
     ids.forEach(pid=>{const P=peersRef.current.get(pid)||makePeer(pid);if(P)P.seen=true});
     // only drop someone who was in the call and has now left (an early offer can arrive before presence lists them)
     [...peersRef.current.entries()].forEach(([pid,P])=>{if(P.seen&&!ids.includes(pid))closePeer(pid)})});
-   ch.subscribe(async status=>{if(status==='SUBSCRIBED'){await ch.track({name:me.name,at:Date.now()});setBase(x=>x==='starting'?'live':x)}
+   ch.subscribe(async status=>{if(status==='SUBSCRIBED'){await ch.track({name:me.name,at:Date.now(),build:APP_BUILD});setBase(x=>x==='starting'?'live':x)}
     else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'){setBase('error');setNote('Couldn’t reach the KnowHow call service. Check your connection, or ask the admin to turn on Realtime in Supabase.')}});
   })();
   return()=>{alive=false;closedRef.current=true;const r=recRef.current;if(r){recRef.current=null;try{send('rec',{on:false})}catch(e){}try{r.mr.state!=='inactive'&&r.mr.stop()}catch(e){}}
@@ -1965,6 +1970,7 @@ function CallRoom({db,act,id,onClose}){
     <div className=${cx('call-local',!(hasCam&&cam)&&!sharing&&'nocam')}><video ref=${localRef} className=${cx(!sharing&&'mirror')} autoPlay playsInline muted></video>${!(hasCam&&cam)&&!sharing&&html`<span className="text-white/80 text-xs">You${!hasCam?' · no camera':' · camera off'}</span>`}${sharing&&html`<span className="call-tag">Sharing your screen</span>`}</div>
     ${board&&html`<${Whiteboard} strokesRef=${strokesRef} tick=${wbTick} onSeg=${wbSeg} onClear=${wbClear} onClose=${toggleBoard}/>`}
     <div className="call-floats" aria-hidden="true">${floats.map(f=>html`<span key=${f.id} style=${{left:f.x+'%'}}>${f.e}</span>`)}</div>
+    ${oldPeers.length>0&&html`<div className="call-warn" role="alert"><${Icon} n="refresh" s=${16}/><span>${oldPeers.map(pid=>nameOf(pid).split(' ')[0]).join(' and ')} ${oldPeers.length>1?'are':'is'} using an older version of KnowHow${isGroup?', so they can’t hear everyone':''}. Ask ${oldPeers.length>1?'them':'them'} to close and reopen KnowHow, then join again.</span></div>`}
    </div>
    ${chatOpen&&html`<aside className="call-chat" aria-label="Chat">
     <div className="flex items-center px-4 py-3 border-b border-white/10"><b className="text-white font-semibold mr-auto">${isGroup?'Group chat':'Chat'}</b><button type="button" className="call-x" aria-label="Close chat" onClick=${()=>setChatOpen(false)}><${Icon} n="x" s=${18}/></button></div>
@@ -2183,6 +2189,7 @@ function CredModal({db,act,mid,cid,onClose}){
 }
 
 /* ---------- auth ---------- */
+const APP_BUILD='20261125-175829'; // replaced with the build time when the site is built for Vercel
 const SB_URL='https://ltskaojuutggtiabzqbr.supabase.co';
 const SB_KEY='sb_publishable_HERUy1g6qigG6lwSOf3oBQ_pQ6RrYMr'; // publishable key: safe in the browser; never put the secret/service_role key here
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'implicit'}}):null;
@@ -2711,12 +2718,22 @@ function App(){
  </${Fragment}>`;
 }
 
+function UpdateBar(){
+ const[nv,setNv]=useState(false);
+ useEffect(()=>{if(APP_BUILD.indexOf('__')===0||!/^https?:$/.test(location.protocol))return;let stop=false;
+  const chk=async()=>{try{const r=await fetch('/?kh_v='+Date.now(),{cache:'no-store'});if(!r.ok)return;const t=await r.text();const m=t.match(/APP_BUILD='([^']+)'/);if(!stop&&m&&m[1]!==APP_BUILD)setNv(true)}catch(e){}};
+  const f=()=>{if(document.visibilityState!=='hidden')chk()};const t0=setTimeout(chk,15000);const iv=setInterval(chk,5*60000);
+  addEventListener('focus',f);document.addEventListener('visibilitychange',f);
+  return()=>{stop=true;clearTimeout(t0);clearInterval(iv);removeEventListener('focus',f);document.removeEventListener('visibilitychange',f)}},[]);
+ if(!nv)return null;
+ return html`<div className="upd-bar" role="status"><${Icon} n="refresh" s=${16}/><span>A new version of KnowHow is ready.</span><button type="button" className="btn sm red" onClick=${()=>location.reload()}>Reload</button></div>`;
+}
 function themePref(){try{return localStorage.getItem('kh-theme')||'light'}catch(e){return'light'}} // light by default; dark/auto are opt-in
 function applyTheme(t){const d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);
  const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.setAttribute('content',d?'#0A1124':'#0F2557');return d}
 applyTheme(themePref());
 try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(themePref()==='auto')applyTheme('auto')})}catch(e){}
-ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundary} full><${App}/></${ErrorBoundary}>`);
+ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundary} full><${App}/><${UpdateBar}/></${ErrorBoundary}>`);
 })();
 </script>
 
