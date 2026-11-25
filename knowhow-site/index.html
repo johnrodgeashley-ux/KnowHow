@@ -1411,8 +1411,8 @@ const agoTxt=ts=>{const s=(Date.now()-new Date(ts).getTime())/1000;if(s<60)retur
 const pubUrl=(bucket,path)=>sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 const safeName=n=>String(n).replace(/[^A-Za-z0-9._-]+/g,'_').slice(-80);
 const dataUrlToBlob=async d=>(await fetch(d)).blob();
-const upImage=async(me,dataUrl,name)=>{const blob=await dataUrlToBlob(dataUrl);const path=`${me}/${name}.jpg`;
- const{error}=await sb.storage.from('avatars').upload(path,blob,{upsert:true,contentType:'image/jpeg'});if(error)throw error;return pubUrl('avatars',path)+'?v='+Date.now()};
+const upImage=async(me,dataUrl,name)=>{const blob=await dataUrlToBlob(dataUrl);const path=`${me}/${name}-${Date.now()}.jpg`;
+ const{error}=await sb.storage.from('avatars').upload(path,blob,{contentType:'image/jpeg'});if(error)throw error;return pubUrl('avatars',path)};
 const dbErr=e=>{const m=(e&&e.message)||'';
  if(/row-level security|permission denied/i.test(m))return 'You don’t have permission to do that.';
  if(/bio/i.test(m)&&/check/i.test(m))return 'Your bio must be 30 to 1000 characters.';
@@ -1592,25 +1592,30 @@ function App(){
   cancel:async id=>{setModal(null);await run(sb.from('sessions').update({status:'cancelled'}).eq('id',id),'Session cancelled')},
   complete:id=>run(sb.from('sessions').update({status:'completed'}).eq('id',id),'Marked completed.'),
   review:(id,stars,text)=>{const s=R.sessions.find(x=>x.id===id);if(!s)return;return run(sb.from('reviews').insert({session_id:id,mentor_id:s.mentor,learner_id:user.id,stars,body:text||null}),'Thanks! Your review is posted.')},
-  becomeMentor:async p=>{const me=user.id;
+  becomeMentor:async p=>{const me=user.id;let stage='saving your profile';
    try{
-    if(p.photo&&String(p.photo).startsWith('data:')){const url=await upImage(me,p.photo,'avatar');const r0=await sb.from('profiles').update({avatar_url:url}).eq('id',me);if(r0.error)throw r0.error;up(n=>{n.user.photo=url})}
+    if(p.photo&&String(p.photo).startsWith('data:')){try{const url=await upImage(me,p.photo,'avatar');const r0=await sb.from('profiles').update({avatar_url:url}).eq('id',me);if(r0.error)throw r0.error;up(n=>{n.user.photo=url})}catch(pe){toast('Your photo didn’t upload ('+dbErr(pe)+'). Saving the rest of your profile.')}}
+    stage='updating your role';
     if(user.role==='Learner'){await sb.from('profiles').update({role:'both'}).eq('id',me);up(n=>{n.user.role='Both'})}
     const row={bio:p.bio,rate_php:p.rate,available_days:p.days,available_from:p.from,available_to:p.to};
+    stage='saving your mentor details';
     let r=await sb.from('mentor_profiles').insert({id:me,...row});
     if(r.error&&/duplicate key/i.test(r.error.message||''))r=await sb.from('mentor_profiles').update(row).eq('id',me);
     if(r.error)throw r.error;
     const ids=p.subjects.map(s=>R.subjByName[s]).filter(Boolean);
+    stage='saving your subjects';
     const rd=await sb.from('mentor_subjects').delete().eq('mentor_id',me);if(rd.error)throw rd.error;
     if(ids.length){const r2=await sb.from('mentor_subjects').insert(ids.map(subject_id=>({mentor_id:me,subject_id})));if(r2.error)throw r2.error}
+    stage='uploading your credentials';
     for(const f of p.files){if(!f.file)continue;const path=`${me}/${Date.now()}-${safeName(f.name)}`;
      const u=await sb.storage.from('credentials').upload(path,f.file,{contentType:f.file.type||undefined});if(u.error)throw u.error;
      const r3=await sb.from('credentials').insert({mentor_id:me,kind:'document',title:f.name,file_path:path});if(r3.error)throw r3.error}
+    stage='uploading your video';
     for(const v of p.vids){if(!v.file)continue;const path=`${me}/${Date.now()}-${safeName(v.name)}`;
      const u=await sb.storage.from('videos').upload(path,v.file,{contentType:v.file.type||undefined});if(u.error)throw u.error;
      const r4=await sb.from('teaching_videos').insert({mentor_id:me,title:v.name.replace(/\.[^.]+$/,'').slice(0,200),file_path:path});if(r4.error)throw r4.error}
     await reload();toast(meM?'Profile updated':'Mentor profile created. An admin will review your uploads.');setRoute({name:'profile',params:{id:me},k:uid()});
-   }catch(e){toast(dbErr(e))}},
+   }catch(e){toast(`Couldn’t finish ${stage}: ${dbErr(e)}`)}},
   setPhoto:async d=>{try{const url=await upImage(user.id,d,'avatar');const{error}=await sb.from('profiles').update({avatar_url:url}).eq('id',user.id);if(error)throw error;up(n=>{n.user.photo=url});toast('Profile photo updated');reload()}catch(e){toast(dbErr(e))}},
   setCover:async(mid,cover)=>{if(mid!==user.id)return;
    try{let patch;if(cover.img){const url=await upImage(user.id,cover.img,'cover');patch={cover_url:url,cover_preset:null}}else patch={cover_url:null,cover_preset:cover.preset||'knowhow'};
