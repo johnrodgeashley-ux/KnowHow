@@ -1,0 +1,17 @@
+{
+  "name": "KnowHow · MMCL Peer Tutoring",
+  "short_name": "KnowHow",
+  "description": "Find MMCL peer mentors, book sessions, chat and meet in video calls.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#EEF2F8",
+  "theme_color": "#0F2557",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

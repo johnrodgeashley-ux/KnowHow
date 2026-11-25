@@ -29,7 +29,7 @@ create extension if not exists pgcrypto;
 -- ---------------------------------------------------------------------
 create type public.user_role        as enum ('learner', 'mentor', 'both');
 create type public.account_status   as enum ('active', 'suspended', 'under_review');
-create type public.subject_category as enum ('Math', 'Programming', 'Engineering', 'Science', 'Business');
+create type public.subject_category as enum ('Math', 'Programming', 'Engineering', 'Science', 'Business', 'General Education', 'Other');
 create type public.arrangement      as enum ('per_session', 'per_day', 'per_week', 'per_month');
 create type public.session_status   as enum ('pending', 'confirmed', 'completed', 'cancelled');
 create type public.credential_kind  as enum ('grade', 'certificate', 'achievement', 'student_id', 'document');
@@ -927,6 +927,121 @@ begin
     alter publication supabase_realtime add table public.messages;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- Seen time, message reactions, viewable credentials, admin subjects (from update 6)
+-- ---------------------------------------------------------------------
+-- ---------- Seen time
+alter table public.messages add column if not exists read_at timestamptz;
+
+-- Recipients may only flip "read"; the database stamps when it was seen
+create or replace function public.protect_message_fields()
+returns trigger language plpgsql as $$
+begin
+  if current_user in ('authenticated', 'anon') then
+    new.id := old.id;
+    new.sender_id := old.sender_id;
+    new.recipient_id := old.recipient_id;
+    new.body := old.body;
+    new.created_at := old.created_at;
+  end if;
+  if new.read and not old.read then
+    new.read_at := now();
+  elsif not new.read then
+    new.read_at := null;
+  else
+    new.read_at := old.read_at;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists messages_protect on public.messages;
+create trigger messages_protect
+  before update on public.messages
+  for each row execute function public.protect_message_fields();
+
+-- ---------- 2) Reactions (one per person per message; change or remove it any time)
+create table if not exists public.message_reactions (
+  message_id  uuid not null references public.messages (id) on delete cascade,
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  emoji       text not null check (char_length(emoji) between 1 and 16),
+  created_at  timestamptz not null default now(),
+  primary key (message_id, user_id)
+);
+
+alter table public.message_reactions enable row level security;
+grant select, insert, update, delete on public.message_reactions to authenticated;
+
+-- Only the two people in the conversation can see or react
+create or replace function public.in_message(mid uuid)
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.messages m
+    where m.id = mid and auth.uid() in (m.sender_id, m.recipient_id)
+  );
+$$;
+revoke execute on function public.in_message(uuid) from public, anon;
+grant  execute on function public.in_message(uuid) to authenticated;
+
+drop policy if exists "reactions: read in my chats" on public.message_reactions;
+create policy "reactions: read in my chats" on public.message_reactions for select to authenticated
+  using (public.in_message(message_id));
+
+drop policy if exists "reactions: add own" on public.message_reactions;
+create policy "reactions: add own" on public.message_reactions for insert to authenticated
+  with check (user_id = auth.uid() and public.in_message(message_id));
+
+drop policy if exists "reactions: change own" on public.message_reactions;
+create policy "reactions: change own" on public.message_reactions for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid() and public.in_message(message_id));
+
+drop policy if exists "reactions: remove own" on public.message_reactions;
+create policy "reactions: remove own" on public.message_reactions for delete to authenticated
+  using (user_id = auth.uid());
+
+-- Live updates (Supabase Realtime)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'message_reactions'
+  ) then
+    alter publication supabase_realtime add table public.message_reactions;
+  end if;
+end $$;
+
+-- ---------- 3) Verified credentials can be viewed by any logged-in user
+-- (pending or rejected files stay private to the mentor and admins)
+drop policy if exists "credentials: verified files readable" on storage.objects;
+create policy "credentials: verified files readable" on storage.objects for select to authenticated
+  using (
+    bucket_id = 'credentials'
+    and exists (
+      select 1 from public.credentials c
+      where c.file_path = storage.objects.name and c.status = 'verified'
+    )
+  );
+
+-- ---------- 4) Admins manage the subject list (add, rename, category, critical, remove)
+
+grant insert, update, delete on public.subjects to authenticated;
+do $$
+declare seq text := pg_get_serial_sequence('public.subjects', 'id');
+begin
+  if seq is not null then execute format('grant usage on sequence %s to authenticated', seq); end if;
+end $$;
+
+drop policy if exists "subjects: admin add" on public.subjects;
+create policy "subjects: admin add" on public.subjects for insert to authenticated
+  with check (public.is_admin());
+drop policy if exists "subjects: admin edit" on public.subjects;
+create policy "subjects: admin edit" on public.subjects for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "subjects: admin remove" on public.subjects;
+create policy "subjects: admin remove" on public.subjects for delete to authenticated
+  using (public.is_admin());
 
 -- =====================================================================
 -- MAKE ADMIN (run separately, after the admin account exists)
