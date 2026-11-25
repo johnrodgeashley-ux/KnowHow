@@ -1423,15 +1423,15 @@ const dbErr=e=>{const m=(e&&e.message)||'';
  return m||'Something went wrong. Please try again.'};
 
 async function fetchAll(me,isAdmin){
- const q=async p=>{const{data,error}=await p;if(error)throw error;return data||[]};
+ const errs=[];const q=async p=>{try{const{data,error}=await p;if(error)throw error;return data||[]}catch(e){errs.push(e);return[]}};
  const[dir,subs,creds,vids,revs,sess,posts,likes,saved,notifs]=await Promise.all([
   q(sb.from('mentor_directory').select('*')),
   q(sb.from('subjects').select('id,name,category,is_critical')),
   q(sb.from('credentials').select('id,mentor_id,kind,title,file_path,status,created_at').order('created_at',{ascending:false})),
   q(sb.from('teaching_videos').select('id,mentor_id,title,file_path,duration_sec,created_at').order('created_at',{ascending:false})),
-  q(sb.from('reviews').select('id,session_id,mentor_id,stars,body,created_at,learner:profiles(full_name)').order('created_at',{ascending:false})),
-  q(sb.from('sessions').select('id,learner_id,mentor_id,subject_id,starts_at,ends_at,arrangement,status,zoom_url,recording_url,notes,learner:profiles(full_name,avatar_url)').order('starts_at')),
-  q(sb.from('posts').select('id,author_id,kind,body,subject_id,created_at,author:profiles(full_name,course,year_level,avatar_url)').order('created_at',{ascending:false}).limit(60)),
+  q(sb.from('reviews').select('id,session_id,mentor_id,stars,body,created_at,learner:profiles!reviews_learner_id_fkey(full_name)').order('created_at',{ascending:false})),
+  q(sb.from('sessions').select('id,learner_id,mentor_id,subject_id,starts_at,ends_at,arrangement,status,zoom_url,recording_url,notes,learner:profiles!sessions_learner_id_fkey(full_name,avatar_url)').order('starts_at')),
+  q(sb.from('posts').select('id,author_id,kind,body,subject_id,created_at,author:profiles!posts_author_id_fkey(full_name,course,year_level,avatar_url)').order('created_at',{ascending:false}).limit(60)),
   q(sb.from('post_likes').select('post_id,user_id')),
   q(sb.from('saved_mentors').select('mentor_id')),
   q(sb.from('notifications').select('id,body,read,created_at').order('created_at',{ascending:false}).limit(30))
@@ -1439,7 +1439,7 @@ async function fetchAll(me,isAdmin){
  let reports=[],activity=[];
  if(isAdmin)[reports,activity]=await Promise.all([
   q(sb.from('reports').select('id,target_type,target_id,reason,status,created_at,reporter:profiles!reports_reporter_id_fkey(full_name)').order('created_at',{ascending:false})),
-  q(sb.from('activity_log').select('id,action,created_at,actor:profiles(full_name)').order('created_at',{ascending:false}).limit(30))]);
+  q(sb.from('activity_log').select('id,action,created_at,actor:profiles!activity_log_actor_id_fkey(full_name)').order('created_at',{ascending:false}).limit(30))]);
  const subjById=Object.fromEntries(subs.map(s=>[s.id,s.name])),subjByName=Object.fromEntries(subs.map(s=>[s.name,s.id]));
  const mentors=dir.map(d=>{const h=hashN(d.id);return{id:d.id,userId:d.id,name:d.full_name||'Mentor',photo:d.avatar_url||null,no:'',course:d.course||'',year:d.year_level||'',
   subjects:d.subjects||[],rate:d.rate_php,days:d.available_days||[],from:String(d.available_from||'00:00').slice(0,5),to:String(d.available_to||'00:00').slice(0,5),
@@ -1459,7 +1459,7 @@ async function fetchAll(me,isAdmin){
   kind:p.kind,text:p.body,tags:p.subject_id?[subjById[p.subject_id]]:[],ago:agoTxt(p.created_at),likedBy:likeMap[p.id]||[],comments:0}});
  const verifs=isAdmin?creds.map(c=>({id:c.id,mentor:c.mentor_id,cred:c.id,kind:KIND_LABEL[c.kind]||'Document',title:c.title,file:String(c.file_path).split('/').pop(),path:c.file_path,ago:agoTxt(c.created_at),
   status:c.status==='verified'?'approved':c.status==='rejected'?'rejected':'pending'})):[];
- return{loaded:true,mentors,subjByName,sessions,posts:postsM,saved:saved.map(s=>s.mentor_id),
+ return{loaded:true,errs,mentors,subjByName,sessions,posts:postsM,saved:saved.map(s=>s.mentor_id),
   notifs:notifs.map(n=>({id:n.id,text:n.body,read:n.read,ago:agoTxt(n.created_at)})),verifs,
   reports:reports.map(r=>({id:r.id,about:`${r.target_type[0].toUpperCase()}${r.target_type.slice(1)} ${String(r.target_id).slice(0,8)}`,reason:r.reason,by:(r.reporter&&r.reporter.full_name)||'Anonymous',ago:agoTxt(r.created_at),status:r.status})),
   activity:activity.map(a=>({id:a.id,text:`${(a.actor&&a.actor.full_name)||'Someone'} ${a.action}`,ago:agoTxt(a.created_at)}))};
@@ -1541,7 +1541,7 @@ function App(){
 
  const reload=async()=>{if(!sb||!user)return;
   if(user.photo&&String(user.photo).startsWith('data:')){try{const url=await upImage(user.id,user.photo,'avatar');await sb.from('profiles').update({avatar_url:url}).eq('id',user.id);up(n=>{n.user.photo=url})}catch(e){}}
-  try{setR(await fetchAll(user.id,user.isAdmin))}catch(e){setR(r=>({...r,loaded:true}));toast('Couldn’t load KnowHow data: '+((e&&e.message)||'network error'))}};
+  try{const res=await fetchAll(user.id,user.isAdmin);setR(res);if(res.errs.length)toast('Some KnowHow data didn’t load: '+(res.errs[0].message||'unknown error'))}catch(e){setR(r=>({...r,loaded:true}));toast('Couldn’t load KnowHow data: '+((e&&e.message)||'network error'))}};
  const reloadRef=useRef(reload);reloadRef.current=reload;
  useEffect(()=>{if(!user){setR(EMPTY_R);return}reloadRef.current();const iv=setInterval(()=>reloadRef.current(),60000);const f=()=>reloadRef.current();addEventListener('focus',f);return()=>{clearInterval(iv);removeEventListener('focus',f)}},[user&&user.id]);
  const toastEl=html`<div className=${cx('toast',toastOn&&'show')} role="status" aria-live="polite">${toastMsg}</div>`;
