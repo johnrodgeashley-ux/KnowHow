@@ -63,10 +63,23 @@ alter table public.push_config enable row level security;   -- no policies: only
 revoke all on public.push_config from anon, authenticated;
 insert into public.push_config (id, hook_secret, function_url)
   values (1, replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
-          'https://ltskaojuutggtiabzqbr.supabase.co/functions/v1/push')
+          'https://ltskaojuutggtiabzqbr.supabase.co/functions/v1/push')   -- must match the deployed function's endpoint URL
   on conflict (id) do update
     set function_url = excluded.function_url,
         hook_secret = coalesce(public.push_config.hook_secret, excluded.hook_secret);
+
+-- The server role (used by the push function) needs table access; this project doesn't grant new tables automatically
+grant select, insert, update on public.push_config to service_role;
+grant select, delete on public.push_subscriptions to service_role;
+-- The website reads the public key from here (the private key never leaves the server)
+create or replace function public.push_public_key()
+returns text
+language sql stable security definer set search_path = public
+as $$
+  select vapid_public from public.push_config where id = 1;
+$$;
+revoke execute on function public.push_public_key() from public, anon;
+grant  execute on function public.push_public_key() to authenticated;
 
 -- Ask the push function to deliver one notification (never blocks or breaks the original action)
 create or replace function public.push_notify(target uuid, title text, msg text, tag text)

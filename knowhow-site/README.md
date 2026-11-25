@@ -75,6 +75,8 @@ Phones and computers get KnowHow notifications (session requests, confirmations,
 2. **Supabase → Edge Functions → Deploy a new function → Via editor**: name it `push`, paste `supabase/functions/push/index.ts`, and turn **off** "Verify JWT" (the database calls it). Deploy.
 3. In KnowHow: account menu → **Turn on notifications**. On iPhone, install KnowHow to the home screen first (iOS only allows push for installed web apps).
 
+If the function's endpoint URL doesn't end in `/functions/v1/push` (the editor sometimes keeps a random slug even after renaming), set it in SQL: `update public.push_config set function_url = '<endpoint URL>' where id = 1;`
+
 The push keys are created by the function on first use and stored in `public.push_config`, which only the server can read. Nothing secret goes in the website or this repo.
 
 ## Email (sign-up and password reset)

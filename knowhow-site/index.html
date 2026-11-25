@@ -1837,7 +1837,7 @@ function CallRoom({db,act,id,onClose}){
  const send=(type,payload)=>{const ch=chRef.current;if(ch)ch.send({type:'broadcast',event:'sig',payload:{type,from:me.id,...(payload||{})}})};
  const patch=(pid,o)=>setPeers(p=>p[pid]?{...p,[pid]:{...p[pid],...o}}:p);
  const addFloat=e=>{const fid=uid();setFloats(f=>[...f,{id:fid,e,x:10+Math.random()*70}]);setTimeout(()=>setFloats(f=>f.filter(x=>x.id!==fid)),2600)};
- const closePeer=pid=>{const P=peersRef.current.get(pid);if(P){const pc=P.pc;pc.ontrack=pc.onicecandidate=pc.onnegotiationneeded=pc.onconnectionstatechange=null;try{pc.close()}catch(e){}peersRef.current.delete(pid)}
+ const closePeer=pid=>{const P=peersRef.current.get(pid);if(P){if(P.joinedSfx&&!closedRef.current)sfx('leave');const pc=P.pc;pc.ontrack=pc.onicecandidate=pc.onnegotiationneeded=pc.onconnectionstatechange=null;try{pc.close()}catch(e){}peersRef.current.delete(pid)}
   vidEls.current.delete(pid);setPeers(p=>{if(!(pid in p))return p;const n={...p};delete n[pid];return n})};
  const makePeer=pid=>{if(peersRef.current.has(pid))return peersRef.current.get(pid);if(typeof RTCPeerConnection==='undefined')return null;
   const pc=new RTCPeerConnection({iceServers:iceRef.current||ICE_SERVERS});const P={pc,makingOffer:false,ignoreOffer:false,pendingIce:[],polite:me.id>pid};peersRef.current.set(pid,P);
@@ -1854,13 +1854,13 @@ function CallRoom({db,act,id,onClose}){
   pc.onicecandidate=({candidate})=>{if(candidate)send('ice',{to:pid,candidate:candidate.toJSON()})};
   // In each pair only the impolite side opens the first negotiation, so two offers never cross while people join at the same moment.
   pc.onnegotiationneeded=async()=>{if(P.polite&&!P.negotiated)return;try{P.makingOffer=true;await pc.setLocalDescription();send('sdp',{to:pid,description:pc.localDescription.toJSON()})}catch(e){}finally{P.makingOffer=false}};
-  pc.onconnectionstatechange=()=>{const cs=pc.connectionState;patch(pid,{conn:cs});
+  pc.onconnectionstatechange=()=>{const cs=pc.connectionState;patch(pid,{conn:cs});if(cs==='connected'&&!P.joinedSfx){P.joinedSfx=true;sfx('join')}
    if(cs==='connected'){setNote('');send('cam',{on:camOnRef.current});if(sharingRef.current)send('share',{on:true});if(boardRef.current){send('wb',{op:'open',on:true});if(strokesRef.current.length)send('wb',{op:'state',strokes:strokesRef.current.slice(-200)})}if(recRef.current)send('rec',{on:true})}
    else if(cs==='failed'){try{pc.restartIce()}catch(e){}}};
   return P};
  const onSig=async p=>{if(!p||p.from===me.id||closedRef.current)return;if(p.to&&p.to!==me.id)return;
-  if(p.type==='chat'){setMsgs(m=>[...m,{id:p.mid,from:p.from,name:p.name,text:p.text,at:p.at}]);if(!chatOpenRef.current)setUnread(u=>u+1);return}
-  if(p.type==='react'){addFloat(p.emoji);return}
+  if(p.type==='chat'){setMsgs(m=>[...m,{id:p.mid,from:p.from,name:p.name,text:p.text,at:p.at}]);if(!chatOpenRef.current)setUnread(u=>u+1);sfx('blip');return}
+  if(p.type==='react'){addFloat(p.emoji);sfx('pop');return}
   if(p.type==='share'){patch(p.from,{sharing:!!p.on});return}
   if(p.type==='cam'){patch(p.from,{camOff:!p.on});return}
   if(p.type==='rec'){patch(p.from,{rec:!!p.on});return}
@@ -2214,7 +2214,7 @@ function CredModal({db,act,mid,cid,onClose}){
 }
 
 /* ---------- auth ---------- */
-const APP_BUILD='20261125-181004'; // replaced with the build time when the site is built for Vercel
+const APP_BUILD='20261125-183200'; // replaced with the build time when the site is built for Vercel
 const SB_URL='https://ltskaojuutggtiabzqbr.supabase.co';
 const SB_KEY='sb_publishable_HERUy1g6qigG6lwSOf3oBQ_pQ6RrYMr'; // publishable key: safe in the browser; never put the secret/service_role key here
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'implicit'}}):null;
@@ -2514,7 +2514,10 @@ function App(){
  useEffect(()=>{if(!user){setR(EMPTY_R);return}reloadRef.current();const iv=setInterval(()=>reloadRef.current(),60000);const f=()=>reloadRef.current();addEventListener('focus',f);return()=>{clearInterval(iv);removeEventListener('focus',f)}},[user&&user.id]);
  const[online,setOnline]=useState(()=>new Set());
  const[dark,setDark]=useState(()=>document.documentElement.classList.contains('dark'));
- const[pushOn,setPushOn]=useState(false);const[pushBusy,setPushBusy]=useState(false);
+ const notifSeen=useRef(null);useEffect(()=>{if(!R.loaded){notifSeen.current=null;return}const ids=new Set((R.notifs||[]).map(n=>n.id));
+  if(notifSeen.current){const fresh=(R.notifs||[]).some(n=>!n.read&&!notifSeen.current.has(n.id));if(fresh)sfx('notify')}notifSeen.current=ids},[R.notifs,R.loaded]);
+ const[pushOn,setPushOn]=useState(false);const[sndOn,setSndOn]=useState(soundOn);
+ const toggleSound=()=>{const v=!sndOn;try{localStorage.setItem('kh-sound',v?'on':'off')}catch(e){}setSndOn(v);if(v)setTimeout(()=>sfx('notify'),50)};const[pushBusy,setPushBusy]=useState(false);
  useEffect(()=>{if(!user||!pushSupported())return;let live=true;(async()=>{try{if(Notification.permission!=='granted'){if(live)setPushOn(false);return}const r=await enablePush();if(live)setPushOn(r==='ok')}catch(e){}})();return()=>{live=false}},[user&&user.id]);
  const turnOnPush=async()=>{setMenu(null);if(isIOS()&&!isStandalone()){toast('On iPhone, install KnowHow to your home screen first, then turn on notifications from the app.');setModal({type:'install'});return}
   if(!pushSupported()){toast('This browser can’t show notifications. Try Chrome, Edge or Safari.');return}
@@ -2528,7 +2531,7 @@ function App(){
  useEffect(()=>{if(!user||user.isAdmin)return;const tick=()=>{const now=Date.now();const list=(RRef.current.sessions||[]).filter(s=>s.status==='confirmed');let hit=null;
   for(const s of list){const st=sessStartMs(s),en=sessEndMs(s);if(st-now<=15*60000&&now<en){hit=s;break}}
   if(!hit){setRemind(null);return}setRemind(r=>r&&r.id===hit.id?r:{id:hit.id});
-  const k='kh-rem-'+hit.id;let seen=false;try{seen=localStorage.getItem(k)==='1'}catch(e){}if(seen)return;try{localStorage.setItem(k,'1')}catch(e){}
+  const k='kh-rem-'+hit.id;let seen=false;try{seen=localStorage.getItem(k)==='1'}catch(e){}if(seen)return;try{localStorage.setItem(k,'1')}catch(e){}sfx('reminder');
   const mins=Math.max(0,Math.round((sessStartMs(hit)-now)/60000));
   if(typeof Notification!=='undefined'&&Notification.permission==='granted'){try{const n=new Notification('KnowHow · '+hit.subject,{body:mins>0?`Starts in ${mins} min. Tap to join the call.`:'Starting now. Tap to join the call.',icon:'/assets/app-icon-192.png',tag:'kh-'+hit.id});n.onclick=()=>{try{window.focus()}catch(e){}setModal({type:'call',id:hit.id});n.close()}}catch(e){}}};
   remindTick.current=tick;tick();const iv=setInterval(tick,30000);return()=>{clearInterval(iv);remindTick.current=null}},[user&&user.id]);
@@ -2550,7 +2553,7 @@ function App(){
   const upsertMsg=m=>setR(r=>{const i=r.messages.findIndex(x=>x.id===m.id);if(i<0)return{...r,messages:[...r.messages,m]};const a=r.messages.slice();a[i]={...a[i],...m};return{...r,messages:a}});
   try{ch=sb.channel('inbox-'+user.id)
    .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`recipient_id=eq.${user.id}`},({new:m})=>{if(!m)return;
-    upsertMsg(m);const p=RRef.current.people[m.sender_id];if(!p)reloadRef.current();
+    upsertMsg(m);sfx('msgIn');const p=RRef.current.people[m.sender_id];if(!p)reloadRef.current();
     const rt=routeRef.current;if(!(rt.name==='messages'))toast(`New message from ${p?p.full_name.split(' ')[0]:'someone'}: ${String(m.body).slice(0,40)}`)})
    .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`sender_id=eq.${user.id}`},({new:m})=>{if(m)upsertMsg(m)})
    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'messages',filter:`sender_id=eq.${user.id}`},({new:m})=>{if(m)upsertMsg(m)})
@@ -2636,7 +2639,7 @@ function App(){
     setR(r=>({...r,mentors:r.mentors.map(m=>m.id===mid?{...m,cover:patch.cover_url?{img:patch.cover_url}:{preset:patch.cover_preset}}:m)}));
     await run(sb.from('profiles').update(patch).eq('id',user.id),'Cover updated')}catch(e){toast(dbErr(e))}},
   message:(id,name,photo)=>{if(user.isAdmin)return;nav('messages',{with:id,name,photo})},
-  sendMessage:async(to,body)=>{if(!(await ensureSession()))return false;const{data,error}=await sb.from('messages').insert({sender_id:user.id,recipient_id:to,body}).select('*').single();
+  sendMessage:async(to,body)=>{if(!(await ensureSession()))return false;const{data,error}=await sb.from('messages').insert({sender_id:user.id,recipient_id:to,body}).select('*').single();if(!error)sfx('msgOut');
    if(error){toast(/row-level security/i.test(error.message||'')?'You can only message mentors (if you’re a student) or students (if you’re a mentor).':dbErr(error));return false}
    setR(r=>({...r,messages:r.messages.some(m=>m.id===data.id)?r.messages:[...r.messages,data]}));return true},
   markThreadRead:async other=>{if(!R.messages.some(m=>m.sender_id===other&&m.recipient_id===user.id&&!m.read))return;
@@ -2726,6 +2729,7 @@ function App(){
        <div className="h-px bg-navy/10 mx-2 my-1"></div>
        <label className="nav !h-10 cursor-pointer"><${Icon} n="camera" s=${16}/>${user.photo?'Change profile photo':'Add profile photo'}<input type="file" accept="image/*" className="sr-only" onChange=${async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{act.setPhoto(await readPhoto(f));setMenu(null)}catch(er){toast('That image could not be read. Try a JPG or PNG.')}}}/></label>
        ${!user.isAdmin&&html`<button type="button" className="nav !h-10" onClick=${()=>nav('become')}><${Icon} n="userplus" s=${16}/>${user.mentorId?'My mentor profile':'Become a mentor'}</button>`}
+       <button type="button" className="nav !h-10" role="switch" aria-checked=${sndOn} onClick=${toggleSound}><${Icon} n=${sndOn?'bell':'eyeoff'} s=${16}/>${sndOn?'Sounds on · turn off':'Sounds off · turn on'}</button>
        ${!user.isAdmin&&(pushOn?html`<button type="button" className="nav !h-10" onClick=${turnOffPush}><${Icon} n="bell" s=${16}/>Notifications on · turn off</button>`
         :html`<button type="button" className="nav !h-10" disabled=${pushBusy} onClick=${turnOnPush}><${Icon} n="bell" s=${16}/>${pushBusy?'Turning on…':'Turn on notifications'}</button>`)}
        ${showInstall&&html`<button type="button" className="nav !h-10" onClick=${()=>{setMenu(null);installApp()}}><${Icon} n="download" s=${16}/>Install the app</button>`}
@@ -2755,6 +2759,29 @@ function App(){
  </${Fragment}>`;
 }
 
+/* ---------- sound effects (made by the browser; no audio files) ---------- */
+const soundOn=()=>{try{return localStorage.getItem('kh-sound')!=='off'}catch(e){return true}};
+const sfx=(()=>{let ctx=null;let last={};let fileAudio=null;
+ // Notifications and reminders use KnowHow's notification sound file; if it can't play, the built-in chime plays instead
+ const playFile=()=>{try{if(!fileAudio){fileAudio=new Audio('/assets/notify.mp3');fileAudio.preload='auto';fileAudio.volume=.75}fileAudio.currentTime=0;const pr=fileAudio.play();return pr&&pr.then?pr.then(()=>true,()=>false):Promise.resolve(true)}catch(e){return Promise.resolve(false)}};
+ const tone=(f,t0,dur,type,gain,f2)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,t0);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t0+dur);
+  g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(gain||0.07,t0+0.012);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);o.connect(g).connect(ctx.destination);o.start(t0);o.stop(t0+dur+0.02)};
+ const S={
+  msgIn:t=>{tone(880,t,.14,'sine',.07);tone(1318,t+.09,.18,'sine',.06)},
+  msgOut:t=>{tone(660,t,.07,'sine',.035,990)},
+  notify:t=>{tone(1047,t,.22,'triangle',.06);tone(1319,t+.1,.22,'triangle',.05);tone(1568,t+.2,.32,'triangle',.05)},
+  reminder:t=>{S.notify(t);S.notify(t+.5)},
+  join:t=>{tone(523,t,.14,'sine',.06);tone(784,t+.1,.2,'sine',.06)},
+  leave:t=>{tone(784,t,.14,'sine',.05);tone(523,t+.1,.22,'sine',.05)},
+  blip:t=>{tone(1200,t,.07,'sine',.04)},
+  pop:t=>{tone(400,t,.09,'sine',.07,1400)}
+ };
+ return name=>{try{(window.__sfxLog=window.__sfxLog||[]).push(name);if(!soundOn()||!S[name])return;const now=Date.now();if(last[name]&&now-last[name]<250)return;last[name]=now;
+  const AC=window.AudioContext||window.webkitAudioContext;const synth=()=>{if(!AC)return;ctx=ctx||new AC();if(ctx.state==='suspended')ctx.resume();S[name](ctx.currentTime+0.01)};
+  if(name==='notify'||name==='reminder'){playFile().then(ok=>{(window.__sfxFile=window.__sfxFile||[]).push(ok);if(!ok)synth()});return}
+  synth()}catch(e){}};
+})();
+
 /* ---------- push notifications ---------- */
 const PUSH_URL=SB_URL+'/functions/v1/push';
 const pushSupported=()=>typeof window!=='undefined'&&'serviceWorker' in navigator&&'PushManager' in window&&typeof Notification!=='undefined';
@@ -2764,7 +2791,8 @@ async function enablePush(){
  if(!pushSupported())return 'unsupported';
  const reg=await swReady();if(!reg)return 'no-sw';
  let sub=await reg.pushManager.getSubscription();
- if(!sub){let key=null;try{const r=await fetch(PUSH_URL+'?action=key');if(r.ok){const j=await r.json();key=j&&j.publicKey}}catch(e){}
+ if(!sub){let key=null;try{const{data,error}=await sb.rpc('push_public_key');if(!error&&data)key=data}catch(e){}
+  if(!key){try{const r=await fetch(PUSH_URL+'?action=key');if(r.ok){const j=await r.json();key=j&&j.publicKey}}catch(e){}}
   if(!key)return 'not-setup';
   try{sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(key)})}catch(e){return 'blocked'}}
  const j=sub.toJSON();const{error}=await sb.rpc('save_push_subscription',{ep:j.endpoint,p256dh:j.keys.p256dh,auth_key:j.keys.auth,ua:navigator.userAgent||''});
