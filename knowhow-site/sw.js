@@ -3,8 +3,8 @@
 //   the last copy is used only when there is no internet.
 // - Libraries from CDNs and the app icons are cached.
 // - Supabase (logins, data, files, calls) is never cached.
-const CACHE = 'knowhow-v1';
-const SHELL = ['/', '/manifest.webmanifest', '/assets/icon-192.png', '/assets/icon-512.png'];
+const CACHE = 'knowhow-v2';
+const SHELL = ['/', '/manifest.webmanifest', '/assets/app-icon-192.png', '/assets/app-icon-512.png'];
 const CDN = /^https:\/\/(cdnjs\.cloudflare\.com|unpkg\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com)\//;
 
 self.addEventListener('install', (e) => {

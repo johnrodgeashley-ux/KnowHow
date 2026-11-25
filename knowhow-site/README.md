@@ -9,7 +9,7 @@ Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. 
 | `index.html` | The whole app in one file (React 18 + htm, Tailwind compiled in). Open it in a browser or deploy it as a static site. |
 | `supabase/schema.sql` | Database setup for Supabase: tables, row-level security, admin functions, storage buckets, subject list. |
 | `assets/logo.png`, `assets/mark.png` | KnowHow logo and mascot with transparent backgrounds. |
-| `manifest.webmanifest`, `sw.js`, `assets/icon-*.png` | Makes KnowHow installable as an app (home screen / desktop) and lets it open offline. |
+| `manifest.webmanifest`, `sw.js`, `assets/app-icon-*.png` | Makes KnowHow installable as an app (home screen / desktop) and lets it open offline. |
 | `supabase/functions/turn-credentials/` | Optional relay server for video calls on strict networks (see below). |
 
 ## Current state
