@@ -741,6 +741,37 @@ grant update on public.profiles to authenticated;
 -- (Reading profiles stays column-limited, so emails and student numbers
 --  remain private. Row-level security policies are unchanged.)
 
+-- ---------------------------------------------------------------------
+-- Explicit permissions for logged-in users (role "authenticated").
+-- Needed when "Automatically expose new tables" is off in Supabase.
+-- Row-level security policies still decide WHICH rows each person sees
+-- or changes; protected fields are kept by the triggers above.
+-- ---------------------------------------------------------------------
+grant usage on schema public to authenticated;
+
+grant select                         on public.subjects         to authenticated;
+grant select, insert, update, delete on public.mentor_profiles  to authenticated;
+grant select, insert, delete         on public.mentor_subjects  to authenticated;
+grant select, insert, delete         on public.credentials      to authenticated;
+grant select, insert, delete         on public.teaching_videos  to authenticated;
+grant select, insert, update         on public.sessions         to authenticated;
+grant select, insert, delete         on public.reviews          to authenticated;
+grant select, insert, update, delete on public.posts            to authenticated;
+grant select, insert, delete         on public.post_likes       to authenticated;
+grant select, insert, delete         on public.saved_mentors    to authenticated;
+grant select, update, delete         on public.notifications    to authenticated;
+grant select, insert                 on public.reports          to authenticated;
+grant select                         on public.activity_log     to authenticated;
+grant select                         on public.mentor_directory to authenticated;
+
+-- profiles: everyone may read names/courses/photos (not emails or student numbers);
+-- each person may update their own row (protected fields are kept by a trigger)
+grant select (id, full_name, course, year_level, role, avatar_url, cover_url, cover_preset,
+              status, is_admin, id_verified, created_at) on public.profiles to authenticated;
+grant update on public.profiles to authenticated;
+
+grant usage, select on all sequences in schema public to authenticated;
+
 -- =====================================================================
 -- MAKE ADMIN (run separately, after the admin account exists)
 -- If the admin email is NOT Gmail, first allow it:
