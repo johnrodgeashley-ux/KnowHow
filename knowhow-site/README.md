@@ -27,6 +27,7 @@ Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. 
 - **Payments (tracking only)**: mentors add their GCash number on their profile; students see how much to pay, tap "I've paid" with an optional reference, and the mentor confirms. KnowHow never handles money.
 - **Backup Zoom link**: mentors save their Zoom link once; it's attached to sessions they confirm.
 - **Reminders & calendar**: a banner (and a phone/computer notification if allowed) 15 minutes before a session, plus Add to Google Calendar / .ics with a 15-minute alarm.
+- **Push notifications** (see below) and **admin tools**: admins can cancel any session (Admin Panel → Sessions) and delete posts; authors can delete their own posts.
 - **Comments** on study feed posts, with notifications to the post's author.
 - **Admin manages subjects**: Admin Panel → Subjects to add, rename, change category, mark critical, or remove subjects.
 - **Dark mode** (account menu; follows the phone/computer setting by default) and **installable app** (account menu → Install the app, or the banner on the dashboard).
@@ -65,6 +66,16 @@ Calls connect browser to browser. Some networks (school Wi-Fi, mobile data with 
 The website picks it up automatically; the keys never reach the browser.
 
 `supabase/functions/create-zoom-meeting/` is from the older Zoom flow and is optional now. Mentors can still paste a backup Zoom link when confirming.
+
+## Push notifications
+
+Phones and computers get KnowHow notifications (session requests, confirmations, reminders 15 minutes before, new messages, payments, comments) even when the app is closed.
+
+1. Run `supabase/update-9.sql` (it turns on `pg_net` and schedules reminders with `pg_cron`; if the health report says pg_cron is MISSING, turn it on in **Database → Extensions** and run the file again).
+2. **Supabase → Edge Functions → Deploy a new function → Via editor**: name it `push`, paste `supabase/functions/push/index.ts`, and turn **off** "Verify JWT" (the database calls it). Deploy.
+3. In KnowHow: account menu → **Turn on notifications**. On iPhone, install KnowHow to the home screen first (iOS only allows push for installed web apps).
+
+The push keys are created by the function on first use and stored in `public.push_config`, which only the server can read. Nothing secret goes in the website or this repo.
 
 ## Email (sign-up and password reset)
 
