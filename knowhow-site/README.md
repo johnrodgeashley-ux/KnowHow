@@ -22,6 +22,12 @@ Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. 
 - **Messages**: private student ↔ mentor chat with live delivery, typing dots, "Active now", "Seen" with time, emoji reactions on any message, and an emoji picker.
 - **Credentials**: mentors' certificates and grades show as a gallery on their profile with a full viewer (zoom, PDF, download). Verified files are viewable by any logged-in user; pending ones stay private to the mentor and admins.
 - **Group sessions** (up to 8 students): mentors can open a group class that students join from their dashboard or the mentor's profile, and any student can add classmates (by Gmail) to a session they're in. Each student pays the mentor's full rate and can leave their own review. The video call becomes a grid for everyone (screen sharer shown large); whiteboard, chat and recording include the whole group.
+- **No double-booking**: a mentor (or student) can't have two sessions at the same time; the booking form greys out taken times.
+- **Reschedule**: the mentor or the student who booked suggests a new time and the other accepts or declines (mentors move group classes directly).
+- **Payments (tracking only)**: mentors add their GCash number on their profile; students see how much to pay, tap "I've paid" with an optional reference, and the mentor confirms. KnowHow never handles money.
+- **Backup Zoom link**: mentors save their Zoom link once; it's attached to sessions they confirm.
+- **Reminders & calendar**: a banner (and a phone/computer notification if allowed) 15 minutes before a session, plus Add to Google Calendar / .ics with a 15-minute alarm.
+- **Comments** on study feed posts, with notifications to the post's author.
 - **Admin manages subjects**: Admin Panel → Subjects to add, rename, change category, mark critical, or remove subjects.
 - **Dark mode** (account menu; follows the phone/computer setting by default) and **installable app** (account menu → Install the app, or the banner on the dashboard).
 - **Database updates** live in `supabase/`. On an existing project run each `update-*.sql` once, in order. `schema.sql` already includes them for a fresh project.
@@ -59,6 +65,17 @@ Calls connect browser to browser. Some networks (school Wi-Fi, mobile data with 
 The website picks it up automatically; the keys never reach the browser.
 
 `supabase/functions/create-zoom-meeting/` is from the older Zoom flow and is optional now. Mentors can still paste a backup Zoom link when confirming.
+
+## Email (sign-up and password reset)
+
+Supabase's built-in email is only for testing and allows very few emails per hour, so sign-ups and password resets start failing once classmates join. Connect a free email service once:
+
+1. Sign up at **brevo.com** (free plan). Under **Senders**, add and verify the Gmail you want emails to come from.
+2. In Brevo open **SMTP & API → SMTP**. Copy the **SMTP server** (`smtp-relay.brevo.com`), **port** (`587`), **login**, and create an **SMTP key**.
+3. In **Supabase → Authentication → Emails → SMTP Settings**, turn on **Custom SMTP** and fill in: sender email (the verified Gmail), sender name `KnowHow`, host, port, username (the Brevo login) and password (the SMTP key). Save.
+4. In **Supabase → Authentication → Rate Limits**, raise **emails per hour** (for example to 100).
+
+Resend works the same way if you prefer it.
 
 ## Sign-up rules
 
