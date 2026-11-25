@@ -1078,15 +1078,29 @@ function Saved({db,act}){const ms=db.mentors.filter(m=>db.saved.includes(m.id));
 
 function Admin({db,act}){
  const[tab,setTab]=useState('overview');
+ const[remote,setRemote]=useState(null);const[aErr,setAErr]=useState('');const[aBusy,setABusy]=useState(false);
+ const ROLE_TXT={learner:'Learner',mentor:'Mentor',both:'Learner & Mentor'},ST_TXT={active:'Active',suspended:'Suspended',under_review:'Under review'};
+ const loadAccounts=async()=>{if(!sb)return;setABusy(true);setAErr('');
+  try{const{data,error}=await sb.rpc('admin_accounts');if(error)throw error;
+   setRemote((data||[]).map(p=>{const lm=db.mentors.find(m=>m.userId===p.id);return{id:p.id,name:p.full_name||p.email,email:p.email,no:p.student_no||'—',course:p.course||'—',year:p.year_level||'',role:p.is_admin?'Admin':(ROLE_TXT[p.role]||'Learner'),status:ST_TXT[p.status]||'Active',idOk:!!p.id_verified,isAdmin:!!p.is_admin,mentor:lm&&lm.id,pal:(p.full_name||'').length,created:p.created_at}}))}
+  catch(e){setAErr('Couldn’t load accounts from the database: '+((e&&e.message)||'unknown error'))}
+  setABusy(false)};
+ useEffect(()=>{loadAccounts()},[]);
+ const accounts=remote||db.accounts;
+ const adminDo=async(kind,id,val)=>{
+  if(!remote){act.admin(kind,id,val);return}
+  const r=kind==='status'?await sb.rpc('admin_set_status',{target:id,new_status:val==='Suspended'?'suspended':'active'}):await sb.rpc('admin_verify_id',{target:id});
+  if(r.error){act.toast(r.error.message||'That didn’t work. Try again.');return}
+  act.toast(kind==='status'?(val==='Suspended'?'Account suspended':'Account reactivated'):'Student ID verified');loadAccounts()};
  const pv=db.verifs.filter(v=>v.status==='pending'),or=db.reports.filter(r=>r.status==='open');
  const hasSamples=db.mentors.some(m=>m.sample);
  const ws=monOf(today);const perDay=[0,1,2,3,4,5,6].map(i=>db.allSessions.filter(s=>s.date===ymd(addD(ws,i))&&s.status!=='cancelled').length);const max=Math.max(1,...perDay);
  const stat=(l,v,ic,i,c)=>html`<div className="glass r-card p-4 flex flex-col gap-2" style=${{'--i':i}}><span className=${cx('w-10 h-10 rounded-2xl grid place-items-center text-white',c||'bg-navy')}><${Icon} n=${ic} s=${18}/></span><b className="text-2xl font-semibold tnum">${v}</b><span className="text-xs muted">${l}</span></div>`;
  return html`<div className="flex flex-col gap-4">
-  <div className="flex items-center gap-3 flex-wrap"><${Seg} label="Admin section" value=${tab} onChange=${setTab} opts=${[{v:'overview',l:'Overview'},{v:'accounts',l:'Accounts'},{v:'verify',l:`Verify (${pv.length})`},{v:'reports',l:`Reports (${or.length})`}]}/><span className="flex-1"></span><span className="tag navy"><${Icon} n="shield" s=${12}/>Admin view (demo)</span></div>
+  <div className="flex items-center gap-3 flex-wrap"><${Seg} label="Admin section" value=${tab} onChange=${setTab} opts=${[{v:'overview',l:'Overview'},{v:'accounts',l:'Accounts'},{v:'verify',l:`Verify (${pv.length})`},{v:'reports',l:`Reports (${or.length})`}]}/><span className="flex-1"></span><span className="tag navy"><${Icon} n="shield" s=${12}/>Administrator</span></div>
   ${tab==='overview'&&html`<div key="o" className="grid gap-4 stag" style=${{gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))'}}>
    <section className="glass r-card p-5 col-span-full flex flex-wrap items-center gap-4" style=${{'--i':0}}><${LogoMark} s=${48}/><div className="flex-1 min-w-[220px]"><b className="font-semibold block">Demo content</b><span className="text-sm muted">${hasSamples?'Sample mentors, posts and credential uploads are loaded. Remove them before going live.':'The app starts empty. Load 8 sample mentors with posts and uploads to demo it to the client.'}</span></div>${hasSamples?html`<button type="button" className="btn sm ghost !text-crimson" onClick=${act.clearSamples}>Remove sample data</button>`:html`<button type="button" className="btn sm navy" onClick=${act.loadSamples}><${Icon} n="sparkle" s=${15}/>Load sample mentors</button>`}</section>
-   ${stat('Registered students',db.accounts.filter(a=>!a.isAdmin&&!a.sample).length,'users',0)}
+   ${stat('Registered students',accounts.filter(a=>!a.isAdmin&&!a.sample).length,'users',0)}
    ${stat('Mentors',db.mentors.length,'grad',1)}
    ${stat('Sessions this week',perDay.reduce((a,b)=>a+b,0),'calendar',2)}
    ${stat('Pending verifications',pv.length,'id',3,'bg-crimson')}
@@ -1096,11 +1110,14 @@ function Admin({db,act}){
    <section className="glass r-card p-5 col-span-full lg:col-span-2 flex flex-col gap-2" style=${{'--i':6}}><span className="eyebrow">Recent activity</span>
     ${!db.activity.length&&html`<p className="muted text-sm m-0">No activity yet.</p>`}${db.activity.slice(0,6).map(a=>html`<div key=${a.id} className="flex gap-2.5 items-start text-[13px]"><span className="w-2 h-2 rounded-full bg-crimson mt-1.5 flex-none"></span><span className="flex-1">${a.text}</span><span className="faint text-[11px] whitespace-nowrap">${a.ago}</span></div>`)}</section>
   </div>`}
-  ${tab==='accounts'&&html`<div key="a" className="glass r-card p-2 overflow-x-auto enter"><table className="t"><thead><tr><th>Student</th><th>Student no.</th><th>Role</th><th>ID check</th><th>Status</th><th></th></tr></thead><tbody>
-   ${db.accounts.map(a=>html`<tr key=${a.id}><td><div className="flex items-center gap-2.5"><${Avatar} m=${a} s=${34}/><div className="min-w-0"><b className="font-semibold block whitespace-nowrap">${a.name}</b><span className="text-[11.5px] muted whitespace-nowrap">${a.course} · ${a.year}</span></div></div></td>
-    <td className="tnum whitespace-nowrap">${a.no}</td><td>${a.role}</td><td>${a.idOk?html`<span className="tag ok">Verified</span>`:html`<button type="button" className="btn xs navy" onClick=${()=>act.admin('verifyId',a.id)}>Verify ID</button>`}</td>
+  ${tab==='accounts'&&html`<div key="a" className="glass r-card p-2 overflow-x-auto enter">
+   <div className="flex items-center gap-3 px-3 pt-2 pb-1 flex-wrap"><span className="text-sm muted mr-auto">${remote?html`<${Fragment}><b className="text-navy">${accounts.length}</b> account${accounts.length===1?'':'s'} in KnowHow</${Fragment}>`:aBusy?'Loading accounts…':'Showing accounts on this device only'}</span><button type="button" className="btn xs" onClick=${loadAccounts} disabled=${aBusy}><${Icon} n="refresh" s=${13}/>${aBusy?'Loading…':'Refresh'}</button></div>
+   ${aErr&&html`<p className="err px-3 m-0 pb-1">${aErr}</p>`}
+   <table className="t"><thead><tr><th>Student</th><th>Student no.</th><th>Role</th><th>ID check</th><th>Status</th><th></th></tr></thead><tbody>
+   ${accounts.map(a=>html`<tr key=${a.id}><td><div className="flex items-center gap-2.5"><${Avatar} m=${a} s=${34}/><div className="min-w-0"><b className="font-semibold block whitespace-nowrap">${a.name}</b><span className="text-[11.5px] muted whitespace-nowrap">${a.course}${a.year?` · ${a.year}`:''}</span>${a.email&&html`<span className="text-[11.5px] faint block whitespace-nowrap">${a.email}</span>`}</div></div></td>
+    <td className="tnum whitespace-nowrap">${a.no}</td><td>${a.role}</td><td>${a.idOk?html`<span className="tag ok">Verified</span>`:html`<button type="button" className="btn xs navy" onClick=${()=>adminDo('verifyId',a.id)}>Verify ID</button>`}</td>
     <td><span className=${cx('tag',a.status==='Active'?'ok':a.status==='Suspended'?'crit-soft':'warn')}>${a.status}</span></td>
-    <td className="whitespace-nowrap text-right">${a.mentor&&html`<button type="button" className="btn xs ghost" onClick=${()=>act.nav('profile',{id:a.mentor})}>Profile</button>`}${a.status==='Suspended'?html`<button type="button" className="btn xs" onClick=${()=>act.admin('status',a.id,'Active')}>Reactivate</button>`:!a.isAdmin&&a.id!==db.user.id&&html`<button type="button" className="btn xs ghost !text-crimson" onClick=${()=>act.admin('status',a.id,'Suspended')}>Suspend</button>`}</td></tr>`)}
+    <td className="whitespace-nowrap text-right">${a.mentor&&html`<button type="button" className="btn xs ghost" onClick=${()=>act.nav('profile',{id:a.mentor})}>Profile</button>`}${a.status==='Suspended'?html`<button type="button" className="btn xs" onClick=${()=>adminDo('status',a.id,'Active')}>Reactivate</button>`:!a.isAdmin&&a.id!==db.user.id&&html`<button type="button" className="btn xs ghost !text-crimson" onClick=${()=>adminDo('status',a.id,'Suspended')}>Suspend</button>`}</td></tr>`)}
   </tbody></table></div>`}
   ${tab==='verify'&&html`<div key="v" className="flex flex-col gap-3 stag">${db.verifs.length?db.verifs.map((v,i)=>{const m=db.mentors.find(x=>x.id===v.mentor);return html`<div key=${v.id} className="glass r-card p-4 flex flex-wrap items-center gap-4" style=${{'--i':i}}>
    <div className="doc !p-3 w-24 h-28 flex-none flex flex-col gap-1.5"><span className="h-1.5 w-12 rounded bg-navy/70"></span><span className="h-1 w-16 rounded bg-navy/15"></span><span className="h-1 w-14 rounded bg-navy/15"></span><span className="h-1 w-16 rounded bg-navy/15"></span><span className="mt-auto h-4 w-8 rounded bg-crimson/20"></span></div>
