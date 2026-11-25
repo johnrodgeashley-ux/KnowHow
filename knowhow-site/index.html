@@ -2214,7 +2214,7 @@ function CredModal({db,act,mid,cid,onClose}){
 }
 
 /* ---------- auth ---------- */
-const APP_BUILD='20261125-183200'; // replaced with the build time when the site is built for Vercel
+const APP_BUILD='20261125-183551'; // replaced with the build time when the site is built for Vercel
 const SB_URL='https://ltskaojuutggtiabzqbr.supabase.co';
 const SB_KEY='sb_publishable_HERUy1g6qigG6lwSOf3oBQ_pQ6RrYMr'; // publishable key: safe in the browser; never put the secret/service_role key here
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'implicit'}}):null;
@@ -2762,7 +2762,7 @@ function App(){
 /* ---------- sound effects (made by the browser; no audio files) ---------- */
 const soundOn=()=>{try{return localStorage.getItem('kh-sound')!=='off'}catch(e){return true}};
 const sfx=(()=>{let ctx=null;let last={};let fileAudio=null;
- // Notifications and reminders use KnowHow's notification sound file; if it can't play, the built-in chime plays instead
+ // Notifications, reminders and new messages use KnowHow's notification sound file; if it can't play, the built-in chime plays instead
  const playFile=()=>{try{if(!fileAudio){fileAudio=new Audio('/assets/notify.mp3');fileAudio.preload='auto';fileAudio.volume=.75}fileAudio.currentTime=0;const pr=fileAudio.play();return pr&&pr.then?pr.then(()=>true,()=>false):Promise.resolve(true)}catch(e){return Promise.resolve(false)}};
  const tone=(f,t0,dur,type,gain,f2)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type=type||'sine';o.frequency.setValueAtTime(f,t0);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t0+dur);
   g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(gain||0.07,t0+0.012);g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);o.connect(g).connect(ctx.destination);o.start(t0);o.stop(t0+dur+0.02)};
@@ -2778,7 +2778,7 @@ const sfx=(()=>{let ctx=null;let last={};let fileAudio=null;
  };
  return name=>{try{(window.__sfxLog=window.__sfxLog||[]).push(name);if(!soundOn()||!S[name])return;const now=Date.now();if(last[name]&&now-last[name]<250)return;last[name]=now;
   const AC=window.AudioContext||window.webkitAudioContext;const synth=()=>{if(!AC)return;ctx=ctx||new AC();if(ctx.state==='suspended')ctx.resume();S[name](ctx.currentTime+0.01)};
-  if(name==='notify'||name==='reminder'){playFile().then(ok=>{(window.__sfxFile=window.__sfxFile||[]).push(ok);if(!ok)synth()});return}
+  if(name==='notify'||name==='reminder'||name==='msgIn'){playFile().then(ok=>{(window.__sfxFile=window.__sfxFile||[]).push(ok);if(!ok)synth()});return}
   synth()}catch(e){}};
 })();
 
