@@ -53,6 +53,8 @@ create table public.profiles (
   status       public.account_status not null default 'active',
   id_verified  boolean not null default false,
   avatar_url   text,
+  cover_url    text,
+  cover_preset text,
   created_at   timestamptz not null default now()
 );
 
@@ -72,9 +74,13 @@ create table public.mentor_profiles (
   available_to     time not null,
   verified         boolean not null default false,
   sessions_taught  integer not null default 0,
+  availability     text not null default 'available',
+  status_note      text,
   created_at       timestamptz not null default now(),
   constraint available_days_valid check (available_days <@ array[0,1,2,3,4,5,6]::smallint[]),
-  constraint available_window check (available_to > available_from)
+  constraint available_window check (available_to > available_from),
+  constraint mentor_availability_valid check (availability in ('available', 'busy', 'away')),
+  constraint mentor_status_note_len check (status_note is null or char_length(status_note) <= 120)
 );
 
 create table public.mentor_subjects (
@@ -446,7 +452,11 @@ select
   coalesce(round(r.avg_stars, 1), 0)   as rating,
   coalesce(r.review_count, 0)          as review_count,
   coalesce(s.subjects, '{}')           as subjects,
-  coalesce(s.teaches_critical, false)  as teaches_critical
+  coalesce(s.teaches_critical, false)  as teaches_critical,
+  p.cover_url,
+  p.cover_preset,
+  m.availability,
+  m.status_note
 from public.mentor_profiles m
 join public.profiles p on p.id = m.id and p.status = 'active'
 left join lateral (
@@ -486,9 +496,9 @@ revoke all on all tables in schema public from anon;
 -- profiles: names and courses are visible to signed-in users;
 -- email, student number, is_admin flag changes go through functions.
 revoke all on public.profiles from authenticated;
-grant select (id, full_name, course, year_level, role, avatar_url, status, is_admin, id_verified, created_at)
+grant select (id, full_name, course, year_level, role, avatar_url, cover_url, cover_preset, status, is_admin, id_verified, created_at)
   on public.profiles to authenticated;
-grant update (full_name, course, year_level, role, avatar_url) on public.profiles to authenticated;
+grant update (full_name, course, year_level, role, avatar_url, cover_url, cover_preset) on public.profiles to authenticated;
 create policy "profiles: read"       on public.profiles for select to authenticated using (true);
 create policy "profiles: update own" on public.profiles for update to authenticated
   using (id = auth.uid()) with check (id = auth.uid());
@@ -498,8 +508,8 @@ create policy "subjects: read" on public.subjects for select to authenticated us
 
 -- mentor_profiles: anyone signed in can read; you manage your own (not "verified")
 revoke insert, update on public.mentor_profiles from authenticated;
-grant insert (id, bio, rate_php, available_days, available_from, available_to) on public.mentor_profiles to authenticated;
-grant update (bio, rate_php, available_days, available_from, available_to)     on public.mentor_profiles to authenticated;
+grant insert (id, bio, rate_php, available_days, available_from, available_to, availability, status_note) on public.mentor_profiles to authenticated;
+grant update (bio, rate_php, available_days, available_from, available_to, availability, status_note)     on public.mentor_profiles to authenticated;
 create policy "mentors: read"       on public.mentor_profiles for select to authenticated using (true);
 create policy "mentors: create own" on public.mentor_profiles for insert to authenticated with check (id = auth.uid());
 create policy "mentors: update own" on public.mentor_profiles for update to authenticated

@@ -13,7 +13,8 @@ Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. 
 ## Current state
 
 - **Accounts use Supabase Auth**: sign up (with email confirmation), log in, log out, forgot password, and "Set a new password" from the reset email. Profiles come from `public.profiles`; admins are users with `is_admin = true`.
-- **Everything else is still a prototype**: mentors, bookings, posts, reviews and photos are saved in each visitor's browser (localStorage). Moving those to the Supabase tables is the next step.
+- **All app data lives in Supabase**: mentor profiles, sessions, reviews, posts, likes, saved mentors, notifications, credentials, videos, reports and the activity log. Photos, covers and videos go to Storage (`avatars`, `videos`), credentials to the private `credentials` bucket.
+- **Database updates** live in `supabase/`. On an existing project run each `update-*.sql` once, in order. `schema.sql` already includes them for a fresh project.
 - Supabase project URL and publishable key are set at the top of the auth section in `index.html` (`SB_URL`, `SB_KEY`).
 
 ## Deploy (Vercel)
