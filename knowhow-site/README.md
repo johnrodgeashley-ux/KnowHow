@@ -21,6 +21,7 @@ Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. 
 - **Video calls also have** a shared whiteboard (both people draw, live) and recording (saves a video file to the device of whoever records; the other person sees a "recording" badge).
 - **Messages**: private student ↔ mentor chat with live delivery, typing dots, "Active now", "Seen" with time, emoji reactions on any message, and an emoji picker.
 - **Credentials**: mentors' certificates and grades show as a gallery on their profile with a full viewer (zoom, PDF, download). Verified files are viewable by any logged-in user; pending ones stay private to the mentor and admins.
+- **Group sessions** (up to 8 students): mentors can open a group class that students join from their dashboard or the mentor's profile, and any student can add classmates (by Gmail) to a session they're in. Each student pays the mentor's full rate and can leave their own review. The video call becomes a grid for everyone (screen sharer shown large); whiteboard, chat and recording include the whole group.
 - **Admin manages subjects**: Admin Panel → Subjects to add, rename, change category, mark critical, or remove subjects.
 - **Dark mode** (account menu; follows the phone/computer setting by default) and **installable app** (account menu → Install the app, or the banner on the dashboard).
 - **Database updates** live in `supabase/`. On an existing project run each `update-*.sql` once, in order. `schema.sql` already includes them for a fresh project.
