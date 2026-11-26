@@ -1139,11 +1139,12 @@ function Home({db,act,prefill}){
  if(tab==='today')ms=ms.filter(availToday);
  if(tab==='top')ms=ms.filter(m=>m.reviews.length).sort((a,b)=>rating(b)-rating(a)||b.reviews.length-a.reviews.length);
  ms=ms.slice(0,3);
+ const nWord=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
  const tiles=[
-  {k:'critical',label:'Critical Subjects',sub:`${CRITICAL.length} hard subjects`,ic:'flame',cls:'tile-crit',go:()=>act.nav('critical')},
-  {k:'math',label:'Calculus & Math',sub:`${db.mentors.filter(m=>m.subjects.some(s=>SUBJ[s]?.cat==='Math')).length} mentors`,ic:'trend',cls:'tile-math',go:()=>act.nav('find',{cat:'Math'})},
-  {k:'prog',label:'Programming',sub:`${db.mentors.filter(m=>m.subjects.some(s=>SUBJ[s]?.cat==='Programming')).length} mentors`,ic:'code',cls:'tile-prog',go:()=>act.nav('find',{cat:'Programming'})},
-  {k:'feed',label:'Study Feed',sub:`${db.posts.length} posts`,ic:'msg',cls:'tile-feed',go:()=>document.getElementById('feed')?.scrollIntoView({behavior:'smooth',block:'start'})}
+  {k:'critical',label:'Critical Subjects',sub:nWord(CRITICAL.length,'hard subject'),ic:'flame',cls:'tile-crit',go:()=>act.nav('critical')},
+  {k:'math',label:'Calculus & Math',sub:nWord(db.mentors.filter(m=>m.subjects.some(s=>SUBJ[s]?.cat==='Math')).length,'mentor'),ic:'trend',cls:'tile-math',go:()=>act.nav('find',{cat:'Math'})},
+  {k:'prog',label:'Programming',sub:nWord(db.mentors.filter(m=>m.subjects.some(s=>SUBJ[s]?.cat==='Programming')).length,'mentor'),ic:'code',cls:'tile-prog',go:()=>act.nav('find',{cat:'Programming'})},
+  {k:'feed',label:'Study Feed',sub:nWord(db.posts.length,'post'),ic:'msg',cls:'tile-feed',go:()=>document.getElementById('feed')?.scrollIntoView({behavior:'smooth',block:'start'})}
  ];
  const post=()=>{if(text.trim().length<10){setErr('Write at least a sentence so mentors know what you need.');return}setErr('');act.post({kind:isMentor?kind:'request',text:text.trim(),tags:[subj]});setText('');setOpen(false)};
  return html`<div className="flex flex-col gap-6">
@@ -1356,7 +1357,7 @@ function Profile({db,act,id}){
  if(!m)return html`<${Empty} title="Mentor not found" text="This profile may have been removed."/>`;
  const r=rating(m),saved=db.saved.includes(m.id);
  const dist=[5,4,3,2,1].map(n=>[n,m.reviews.filter(x=>x.stars===n).length]);
- const toRate=db.sessions.find(s=>s.mentor===m.id&&s.status==='completed'&&!s.rated);
+ const toRate=!db.user.isAdmin&&db.user.mentorId!==m.id?db.sessions.find(s=>s.mentor===m.id&&s.status==='completed'&&!s.rated):null;
  const own=db.user.mentorId===m.id||db.user.isAdmin;
  const credIcon={Grade:'file',Certificate:'award',Achievement:'sparkle','Student ID':'id',Document:'file'};
  const subs=[...m.subjects].sort((a,b)=>(SUBJ[b]?.crit?1:0)-(SUBJ[a]?.crit?1:0)||a.localeCompare(b));const SUB_MAX=12;const shownSubs=allSubs?subs:subs.slice(0,SUB_MAX);
@@ -1711,7 +1712,7 @@ function MentorPanel({db,act}){
   <section className="glass r-card p-4 hello flex flex-col gap-3 text-center">
    <span className="mx-auto relative mt-1"><${LogoMark} s=${58}/></span>
    <h2 className="text-[18px] font-light leading-snug tracking-tight m-0 relative">Good ${part} <b className="font-semibold">${db.user.first},</b> ready to teach?</h2>
-   <div className="stats"><div className="stat"><b className="tnum">${pend}</b><span>requests</span></div><div className="stat"><b className="tnum">${conf}</b><span>confirmed</span></div><div className="stat"><b className="tnum">${unread}</b><span>unread</span></div></div>
+   <div className="stats"><div className="stat"><b className="tnum">${pend}</b> <span>${pend===1?'request':'requests'}</span></div><div className="stat"><b className="tnum">${conf}</b> <span>confirmed</span></div><div className="stat"><b className="tnum">${unread}</b> <span>unread</span></div></div>
    <div className="flex gap-2 justify-center flex-wrap">${pend>0&&html`<button type="button" className="btn sm red" onClick=${()=>act.nav('sessions')}>Review requests</button>`}
     ${meM&&html`<button type="button" className="btn sm" onClick=${()=>act.modal({type:'group'})}><${Icon} n="users" s=${14}/>Group class</button>`}${meM?html`<button type="button" className="btn sm" onClick=${()=>act.nav('profile',{id:meM.id})}>My profile</button>`:html`<button type="button" className="btn sm red" onClick=${()=>act.nav('become')}>Set up profile</button>`}</div>
   </section>
@@ -2267,7 +2268,7 @@ function CredModal({db,act,mid,cid,onClose}){
 }
 
 /* ---------- auth ---------- */
-const APP_BUILD='20261125-185713'; // replaced with the build time when the site is built for Vercel
+const APP_BUILD='20261126-023830'; // replaced with the build time when the site is built for Vercel
 const SB_URL='https://ltskaojuutggtiabzqbr.supabase.co';
 const SB_KEY='sb_publishable_HERUy1g6qigG6lwSOf3oBQ_pQ6RrYMr'; // publishable key: safe in the browser; never put the secret/service_role key here
 const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'implicit'}}):null;
