@@ -21,16 +21,17 @@ Peer tutoring and mentoring for Mapúa Malayan Colleges Laguna (MMCL) students. 
 - **Video calls also have** a shared whiteboard (both people draw, live) and recording (saves a video file to the device of whoever records; the other person sees a "recording" badge).
 - **Messages**: private student ↔ mentor chat with live delivery, typing dots, "Active now", "Seen" with time, emoji reactions on any message, and an emoji picker.
 - **Credentials**: mentors' certificates and grades show as a gallery on their profile with a full viewer (zoom, PDF, download). Verified files are viewable by any logged-in user; pending ones stay private to the mentor and admins.
-- **Group sessions** (up to 8 students): mentors can open a group class that students join from their dashboard or the mentor's profile, and any student can add classmates (by Gmail) to a session they're in. Each student pays the mentor's full rate and can leave their own review. The video call becomes a grid for everyone (screen sharer shown large); whiteboard, chat and recording include the whole group.
+- **Face-to-face or online**: when booking, the student picks Online (KnowHow video call) or Face-to-face and types a meeting place (e.g. MMCL Library 2F). Mentors choose which they offer in their profile ("How you teach"); it shows on their card and profile. Face-to-face sessions show where to meet instead of a Join call button. Needs `supabase/update-10.sql`.
+- **Group mentoring was removed** (Nov 2026). The app no longer shows group classes or "add a classmate"; the database tables are kept, and `GROUPS=false` in the app turns it back on.
 - **No double-booking**: a mentor (or student) can't have two sessions at the same time; the booking form greys out taken times.
-- **Reschedule**: the mentor or the student who booked suggests a new time and the other accepts or declines (mentors move group classes directly).
+- **Reschedule**: the mentor or the student who booked suggests a new time and the other accepts or declines.
 - **Payments (tracking only)**: mentors add their GCash number on their profile; students see how much to pay, tap "I've paid" with an optional reference, and the mentor confirms. KnowHow never handles money.
 - **Backup Zoom link**: mentors save their Zoom link once; it's attached to sessions they confirm.
 - **Reminders & calendar**: a banner (and a phone/computer notification if allowed) 15 minutes before a session, plus Add to Google Calendar / .ics with a 15-minute alarm.
 - **Push notifications** (see below) and **admin tools**: admins can cancel any session (Admin Panel → Sessions) and delete posts; authors can delete their own posts.
 - **Comments** on study feed posts, with notifications to the post's author.
 - **Admin manages subjects**: Admin Panel → Subjects to add, rename, change category, mark critical, or remove subjects.
-- **Dark mode** (account menu; follows the phone/computer setting by default) and **installable app** (account menu → Install the app, or the banner on the dashboard).
+- **Installable app** (account menu → Install the app, or the banner on the dashboard). KnowHow is light-only (dark mode was removed because some text was hard to read).
 - **Database updates** live in `supabase/`. On an existing project run each `update-*.sql` once, in order. `schema.sql` already includes them for a fresh project.
 - Supabase project URL and publishable key are set at the top of the auth section in `index.html` (`SB_URL`, `SB_KEY`).
 
@@ -50,6 +51,8 @@ Or import this repository on vercel.com. It's a static site, so no build setting
 3. Sign up the admin with a Gmail address, then run the "MAKE ADMIN" line at the bottom of the SQL file.
 4. **Authentication → URL Configuration**: set the Site URL and a Redirect URL to the deployed link.
 5. **Authentication → Emails → SMTP Settings**: connect a mail service (for example Resend or Brevo) so password-reset emails reach students.
+
+**Existing project?** Run the `supabase/update-*.sql` files you haven't run yet, in order. The latest is `update-10.sql` (face-to-face or online sessions); its last result should show OK on every row.
 
 Only the Project URL and the anon/publishable key go in the website. Never commit the `service_role` key.
 
